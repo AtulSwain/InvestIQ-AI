@@ -322,4 +322,31 @@ th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--text-primary); }
 th.sorted { color: var(--text-primary); }
 table.compact th, table.compact td { padding: 6px 5px; font-size: 13px; }
-table.compact th { font-size: 11px; }
+table.compact th { font-size: 11px; white-space: normal; vertical-align: bottom; }
+table.compact th .term { display: inline; }
+
+/* ---------- glossary tooltips & "What this tells you" captions ---------- */
+.term { display: inline-flex; align-items: center; gap: 4px; }
+.tip {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 16px; height: 16px; padding: 0; margin-left: 4px; border-radius: 50%;
+  border: 1px solid var(--axis); background: transparent; color: var(--text-muted);
+  font: italic 700 10px/1 Georgia, serif; cursor: help; vertical-align: middle; text-transform: none; letter-spacing: 0;
+}
+.term .tip { margin-left: 0; }
+.tip:hover, .tip:focus-visible, .tip[aria-describedby] { border-color: var(--series-1); color: var(--series-1); outline: none; }
+/* Bigger tap target on touch screens without changing the visual size. */
+@media (pointer: coarse) { .tip { position: relative; } .tip::after { content: ""; position: absolute; inset: -10px; } }
+.tip-pop {
+  position: absolute; z-index: 50; padding: 12px 14px; border-radius: 10px;
+  background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18); font-size: 13.5px; line-height: 1.45;
+  text-transform: none; letter-spacing: 0; font-weight: 400;
+}
+.tip-pop strong { display: block; margin-bottom: 4px; font-size: 14px; }
+.tip-pop p { margin: 0; color: var(--text-secondary); }
+.tip-pop .good-if { margin-top: 6px; }
+.tip-pop .good-if span { color: var(--up-text); font-weight: 600; }
+.why { margin: 0 0 12px; font-size: 13.5px; color: var(--text-secondary); }
+.why-label { font-weight: 600; color: var(--text-primary); }
+h2 + .why { margin-top: 2px; }

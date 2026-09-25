@@ -3,6 +3,7 @@
    HTML; bind() wires up charts and inputs once the HTML is in the page. */
 (function () {
   const { esc } = fmt;
+  const { T, tip, why } = glossary; // (i) tooltips + "What this tells you" captions
   const $ = (sel) => document.querySelector(sel);
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -25,8 +26,8 @@
     return `
     <section id="decision" class="section grid grid-2">
       <div class="card">
-        <h2>Buy checklist</h2>
-        <p class="sub">${c.evaluated} checks a careful investor runs before buying</p>
+        <h2>${T("Buy checklist", "checklist")}</h2>
+        ${why("How many of the basic tests a careful investor runs before buying this stock passes.")}
         <div class="check-head tone-${c.tone}">
           <div class="check-score">${c.passed}<span class="muted">/${c.evaluated}</span></div>
           <div><strong>${esc(c.verdict)}</strong><div class="muted" style="font-size:13px">✓ pass · ✗ fail · – not enough data</div></div>
@@ -39,19 +40,19 @@
       </div>
       <div class="card">
         <h2>Trade plan</h2>
-        <p class="sub">Mechanical price levels to plan an entry and exit</p>
+        ${why("At what price you might buy, where to cut losses, and where you might take profit.")}
         ${p.far_above_fair_value
           ? `<p class="callout">The price is far above every fair-value estimate, so there is no sensible mechanical entry right now. The zone below is where the stock would be fairly valued - it may never get there if the market is right about its growth.</p>`
           : p.wait_for_pullback ? `<p class="callout">The price is above the estimated fair value. The entry zone below is where the stock would be closer to fair value - consider waiting for a pullback.</p>` : ""}
         <div class="table-wrap"><table><tbody>
           <tr><td>Current price</td><td><strong>${fmt.money(p.price, cur)}</strong></td></tr>
-          <tr><td>${p.far_above_fair_value ? "Fair-value zone" : "Entry zone"}</td><td>${fmt.money(p.entry_low, cur)} – ${fmt.money(p.entry_high, cur)}</td></tr>
-          <tr><td>Stop-loss</td><td class="down">${fmt.money(p.stop_loss, cur)} <span class="muted">(${fmt.pct(p.stop_loss_pct)} from entry)</span></td></tr>
-          ${p.targets.map((t, i) => `<tr><td>Target ${i + 1} <span class="muted">· ${esc(t.label)}</span></td><td class="up">${fmt.money(t.price, cur)} <span class="muted">(${fmt.pct(t.upside_pct)} from entry)</span></td></tr>`).join("") || `<tr><td>Targets</td><td class="muted">${p.far_above_fair_value ? "Not set while the price is far above fair value" : "No upside targets above the entry"}</td></tr>`}
-          <tr><td>Reward : risk (to target 1)</td><td><strong>${p.risk_reward == null ? "—" : p.risk_reward.toFixed(2) + " : 1"}</strong> <span class="muted">${p.risk_reward == null ? "" : p.risk_reward >= 2 ? "attractive" : p.risk_reward >= 1 ? "acceptable" : "poor"}</span></td></tr>
-          <tr><td>Average daily range (ATR 14)</td><td>${fmt.money(p.atr, cur)} <span class="muted">(${fmt.pct(r.technicals.atr_pct, 1, false)})</span></td></tr>
+          <tr><td>${T(p.far_above_fair_value ? "Fair-value zone" : "Entry zone", "entry_zone")}</td><td>${fmt.money(p.entry_low, cur)} – ${fmt.money(p.entry_high, cur)}</td></tr>
+          <tr><td>${T("Stop-loss")}</td><td class="down">${fmt.money(p.stop_loss, cur)} <span class="muted">(${fmt.pct(p.stop_loss_pct)} from entry)</span></td></tr>
+          ${p.targets.map((t, i) => `<tr><td>${T(`Target ${i + 1}`, "target")} <span class="muted">· ${esc(t.label)}</span></td><td class="up">${fmt.money(t.price, cur)} <span class="muted">(${fmt.pct(t.upside_pct)} from entry)</span></td></tr>`).join("") || `<tr><td>Targets</td><td class="muted">${p.far_above_fair_value ? "Not set while the price is far above fair value" : "No upside targets above the entry"}</td></tr>`}
+          <tr><td>${T("Reward : risk (to target 1)", "reward_risk")}</td><td><strong>${p.risk_reward == null ? "—" : p.risk_reward.toFixed(2) + " : 1"}</strong> <span class="muted">${p.risk_reward == null ? "" : p.risk_reward >= 2 ? "attractive" : p.risk_reward >= 1 ? "acceptable" : "poor"}</span></td></tr>
+          <tr><td>${T("Average daily range (ATR 14)", "atr")}</td><td>${fmt.money(p.atr, cur)} <span class="muted">(${fmt.pct(r.technicals.atr_pct, 1, false)})</span></td></tr>
         </tbody></table></div>
-        <h3>Position size calculator</h3>
+        <h3>${T("Position size calculator", "position_size")}</h3>
         <div class="calc">
           <label>Your capital (${fmt.sym(cur).trim() || cur})<input id="ps-capital" type="number" min="0" step="1000" value="${cur === "INR" ? 500000 : 10000}"></label>
           <label>Max risk per trade (%)<input id="ps-risk" type="number" min="0.1" max="10" step="0.1" value="1"></label>
@@ -71,12 +72,12 @@
     const rd = v.reverse_dcf || {};
     const sens = v.dcf_sensitivity;
     const price = r.quote.price;
-    const stat = (label, value, sub) => `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div>${sub ? `<div class="muted" style="font-size:12px">${sub}</div>` : ""}</div>`;
+    const stat = (label, value, sub, key) => `<div class="stat"><div class="label">${T(label, key)}</div><div class="value">${value}</div>${sub ? `<div class="muted" style="font-size:12px">${sub}</div>` : ""}</div>`;
     return `
     <section class="section grid grid-2">
       <div class="card">
         <h2>Valuation multiples</h2>
-        <p class="sub">How much you pay for each unit of earnings, sales, book value and cash</p>
+        ${why("How expensive the share is relative to its profits, sales, assets and cash.")}
         <div class="stats">
           ${stat("P/E", fmt.n(m.pe, 1), v.average_pe ? `own avg ${fmt.n(v.average_pe, 1)}` : "")}
           ${stat("Forward P/E", fmt.n(m.forward_pe, 1))}
@@ -89,7 +90,7 @@
           ${stat("Enterprise value", fmt.big(m.enterprise_value, cur), "market cap + debt − cash")}
         </div>
         ${v.pe_history && v.pe_history.length ? `
-        <h3>P/E at each year-end</h3>
+        <h3>${T("P/E at each year-end", "historical_pe")}</h3>
         <div class="table-wrap"><table>
           <thead><tr><th>Fiscal year</th><th>Price</th><th>EPS</th><th>P/E</th></tr></thead>
           <tbody>${v.pe_history.map((h) => `<tr><td>${fmt.date(h.fiscal_year_end)}</td><td>${fmt.money(h.price, cur)}</td><td>${fmt.money(h.eps, cur)}</td><td>${fmt.n(h.pe, 1)}</td></tr>`).join("")}
@@ -98,7 +99,8 @@
       </div>
       <div class="card">
         <h2>What is the price assuming?</h2>
-        <p class="sub">Reverse DCF - the free-cash-flow growth needed to justify today's price</p>
+        ${why("How much growth the market already expects - high expectations are easier to disappoint.")}
+        <p class="sub">${T("Reverse DCF")} - the free-cash-flow growth needed to justify today's price</p>
         ${rd.implied_growth_pct != null ? `
           <div class="big-compare">
             <div><div class="label">Growth priced in</div><div class="value">${fmt.pct(rd.implied_growth_pct, 1, false)}<span class="muted">/yr</span></div></div>
@@ -106,7 +108,7 @@
           </div>
           <p>${esc(rd.reading)}</p>` : '<p class="muted">Needs positive free cash flow.</p>'}
         ${sens ? `
-        <h3>DCF value per share - sensitivity</h3>
+        <h3>${T("DCF value per share - sensitivity", "dcf_sensitivity")}</h3>
         <p class="sub">Rows: discount rate (your required return). Columns: growth rate. Base case outlined; shaded cells are above today's price.</p>
         <div class="table-wrap"><table class="sens">
           <thead><tr><th>Discount \\ growth</th>${sens.growth_pct.map((g) => `<th>${fmt.pct(g, 0, false)}</th>`).join("")}</tr></thead>
@@ -134,6 +136,16 @@
     ["Cash conversion (OCF / profit)", "cash_conversion", "x"],
   ];
 
+  // Row key -> glossary entry for its (i) tooltip.
+  const FIN_KEYS = {
+    revenue: "revenue", revenue_growth_pct: "revenue", gross_profit: "gross_profit", ebitda: "ebitda",
+    operating_income: "operating_profit", net_income: "net_income", profit_growth_pct: "net_income", eps: "eps",
+    gross_margin_pct: "gross_margin", operating_margin_pct: "operating_margin", net_margin_pct: "profit_margin",
+    roe_pct: "roe", roce_pct: "roce", roa_pct: "roa", total_assets: null, equity: "book_value", total_debt: "total_debt",
+    cash: null, debt_to_equity: "debt_to_equity", current_ratio: "current_ratio", interest_coverage: "interest_coverage",
+    operating_cash_flow: "ocf", capex: "capex", free_cash_flow: "fcf", cash_conversion: "cash_conversion",
+  };
+
   function finCell(v, kind, cur) {
     if (v == null) return '<span class="muted">—</span>';
     switch (kind) {
@@ -158,18 +170,19 @@
     return `
     <section id="financials" class="card section">
       <h2>Financial breakdown</h2>
+      ${why("The company's report card for each year - sales, profit, margins, debt and cash.")}
       <p class="sub">Annual statements, oldest to newest</p>
       <div class="table-wrap"><table class="fin">
         <thead><tr><th>Metric</th>${years.map((y) => `<th>FY${y.fiscal_year_end.slice(0, 4)}</th>`).join("")}</tr></thead>
         <tbody>${FIN_ROWS.map(([label, key, kind]) => key === null
           ? `<tr class="group"><td colspan="${years.length + 1}">${label}</td></tr>`
-          : years.some((y) => y[key] != null) ? `<tr><td>${label}</td>${years.map((y) => `<td>${finCell(y[key], kind, cur)}</td>`).join("")}</tr>` : "").join("")}</tbody>
+          : years.some((y) => y[key] != null) ? `<tr><td>${T(label, FIN_KEYS[key])}</td>${years.map((y) => `<td>${finCell(y[key], kind, cur)}</td>`).join("")}</tr>` : "").join("")}</tbody>
       </table></div>
     </section>
     <section class="section grid grid-3">
       <div class="card">
         <h2>Margin trend</h2>
-        <p class="sub">Gross, operating and net margin by year</p>
+        ${why("Whether the company keeps more or less of each rupee of sales as profit over time.")}
         <div class="legend">
           <span><span class="swatch" style="background:var(--series-1)"></span> Gross</span>
           <span><span class="swatch" style="background:var(--series-2)"></span> Operating</span>
@@ -178,8 +191,8 @@
         <div class="chart-box short"><canvas id="margin-chart" aria-label="Margin trend"></canvas></div>
       </div>
       <div class="card">
-        <h2>Piotroski F-Score</h2>
-        <p class="sub">9 tests of profitability, debt and efficiency (latest vs previous year)</p>
+        <h2>${T("Piotroski F-Score", "fscore")}</h2>
+        ${why("A 9-point health check - is the business getting stronger or weaker than last year?")}
         ${pio ? `
           <div class="check-head tone-${pio.label === "Strong" ? "good" : pio.label === "Average" ? "mixed" : "bad"}">
             <div class="check-score">${pio.score}<span class="muted">/${pio.out_of}</span></div>
@@ -189,8 +202,8 @@
           : '<p class="muted">Needs at least two years of detailed statements.</p>'}
       </div>
       <div class="card">
-        <h2>Altman Z-Score</h2>
-        <p class="sub">Bankruptcy-risk model for non-financial companies</p>
+        <h2>${T("Altman Z-Score", "zscore")}</h2>
+        ${why("An early-warning score for the risk of the company running into serious financial trouble.")}
         ${alt && alt.z != null ? `
           <div class="check-head tone-${alt.zone === "Safe" ? "good" : alt.zone === "Grey zone" ? "mixed" : "bad"}">
             <div class="check-score">${alt.z}</div>
@@ -227,6 +240,7 @@
     return `
     <section id="breakdown" class="card section">
       <h2>Monthly returns</h2>
+      ${why("Every month's gain or loss - spot good and bad stretches at a glance.")}
       <p class="sub">Each cell is that month's return; the colour gets stronger with bigger moves (blue up, red down)</p>
       <div class="table-wrap"><table class="heatmap">
         <thead><tr><th>Year</th>${MONTHS.map((m) => `<th>${m}</th>`).join("")}<th>Year</th></tr></thead>
@@ -235,8 +249,8 @@
     </section>
     <section class="section grid grid-2">
       <div class="card">
-        <h2>Seasonality</h2>
-        <p class="sub">Average return in each calendar month, all years</p>
+        <h2>${T("Seasonality")}</h2>
+        ${why("Whether some months of the year have tended to be better or worse for this stock.")}
         <div class="chart-box short"><canvas id="season-chart" aria-label="Average return by month"></canvas></div>
         <div class="table-wrap"><table class="compact">
           <thead><tr><th>Month</th>${b.seasonality.map((s) => `<th>${s.month}</th>`).join("")}</tr></thead>
@@ -244,8 +258,9 @@
         </table></div>
       </div>
       <div class="card">
-        <h2>Holding-period returns</h2>
-        <p class="sub">If you had bought in any week and held for N years - annual return (CAGR)</p>
+        <h2>${T("Holding-period returns")}</h2>
+        ${why("How long you needed to hold to make money - longer holding usually means fewer losses.")}
+        <p class="sub">If you had bought in any week and held for N years - annual return (${T("CAGR")})</p>
         <div class="table-wrap"><table class="compact">
           <thead><tr><th>Held</th><th>Worst</th><th>Typical</th><th>Best</th><th>Gained</th><th>&gt;10%/yr</th></tr></thead>
           <tbody>${b.rolling.map((x) => `<tr><td>${x.years} year${x.years > 1 ? "s" : ""}</td><td>${fmt.pctSpan(x.worst_pct)}</td><td>${fmt.pct(x.median_pct)}</td><td>${fmt.pctSpan(x.best_pct)}</td><td>${x.positive_pct}%</td><td>${x.above_10_pct}%</td></tr>`).join("") || '<tr><td colspan="6" class="muted">Not enough history</td></tr>'}</tbody>
@@ -256,10 +271,11 @@
     <section id="dividends" class="section grid grid-2">
       <div class="card">
         <h2>Dividends</h2>
+        ${why("The cash the company pays you each year just for holding the share.")}
         ${d.paid ? `
           <div class="stats" style="margin-bottom:12px">
-            <div class="stat"><div class="label">Last 12 months</div><div class="value">${fmt.money(d.ttm, cur)}</div><div class="muted" style="font-size:12px">per share</div></div>
-            <div class="stat"><div class="label">Yield</div><div class="value">${fmt.pct(d.yield_pct, 2, false)}</div></div>
+            <div class="stat"><div class="label">${T("Last 12 months", "trailing_12m")}</div><div class="value">${fmt.money(d.ttm, cur)}</div><div class="muted" style="font-size:12px">per share</div></div>
+            <div class="stat"><div class="label">${T("Yield", "dividend_yield")}</div><div class="value">${fmt.pct(d.yield_pct, 2, false)}</div></div>
             <div class="stat"><div class="label">5Y dividend growth</div><div class="value">${fmt.pct(d.growth_5y_pct)}</div><div class="muted" style="font-size:12px">per year</div></div>
             <div class="stat"><div class="label">Paid every year for</div><div class="value">${d.streak_years} yrs</div></div>
           </div>
@@ -268,10 +284,10 @@
       </div>
       <div class="card">
         <h2>Ownership</h2>
-        <p class="sub">Who holds the shares</p>
+        ${why("Who owns the company - its management, big funds, or the public.")}
         <div class="table-wrap"><table><tbody>
-          <tr><td>Insiders / promoters</td><td>${fmt.pct(r.fundamentals.insiders_pct, 1, false)}</td></tr>
-          <tr><td>Institutions</td><td>${fmt.pct(r.fundamentals.institutions_pct, 1, false)}</td></tr>
+          <tr><td>${T("Insiders / promoters")}</td><td>${fmt.pct(r.fundamentals.insiders_pct, 1, false)}</td></tr>
+          <tr><td>${T("Institutions")}</td><td>${fmt.pct(r.fundamentals.institutions_pct, 1, false)}</td></tr>
           <tr><td>Public & others</td><td>${r.fundamentals.insiders_pct != null && r.fundamentals.institutions_pct != null ? fmt.pct(Math.max(0, 100 - r.fundamentals.insiders_pct - r.fundamentals.institutions_pct), 1, false) : "—"}</td></tr>
           <tr><td>Shares outstanding</td><td>${r.fundamentals.shares_outstanding ? fmt.n(r.fundamentals.shares_outstanding / (cur === "INR" ? 1e7 : 1e6), 2) + (cur === "INR" ? " Cr" : " M") : "—"}</td></tr>
         </tbody></table></div>

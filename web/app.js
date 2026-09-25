@@ -3,6 +3,7 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const app = $("#app");
   const { esc } = fmt;
+  const { T, tip, why } = glossary; // (i) tooltips + "What this tells you" captions
 
   /* ---------------- storage (per-browser conveniences) ---------------- */
   const store = {
@@ -168,6 +169,7 @@
     const state = store.get("investiq.screener", { sort: "score", dir: -1 });
     box.innerHTML = `
       <h2>Stock screener</h2>
+      ${why("Filter and sort every researched stock to find ones worth a closer look.")}
       <p class="sub">${stocks.length} researched stocks · click a column to sort, a row for the full report · "To fair value" is how far the price would move to reach the estimated fair value</p>
       <div class="filters">
         <input id="sc-text" type="search" placeholder="Filter by name" aria-label="Filter by name">
@@ -177,7 +179,7 @@
         <select id="sc-score" aria-label="Minimum score"><option value="0">Any score</option><option value="5">Score 5+</option><option value="6">Score 6+</option><option value="7">Score 7+</option></select>
       </div>
       <div class="table-wrap"><table class="compact">
-        <thead><tr>${SCREEN_COLS.map(([k, l]) => `<th class="sortable" data-sort="${k}">${l}</th>`).join("")}</tr></thead>
+        <thead><tr>${SCREEN_COLS.map(([k, l]) => `<th class="sortable" data-sort="${k}"><span class="th-label">${l}</span>${glossary.find(l) ? tip(glossary.find(l)) : ""}</th>`).join("")}</tr></thead>
         <tbody id="sc-body"></tbody>
       </table></div>
       <p class="sub" id="sc-count" style="margin-top:8px"></p>`;
@@ -205,12 +207,13 @@
         const on = th.dataset.sort === state.sort;
         th.classList.toggle("sorted", on);
         th.setAttribute("aria-sort", on ? (state.dir > 0 ? "ascending" : "descending") : "none");
-        th.textContent = SCREEN_COLS.find(([k]) => k === th.dataset.sort)[1] + (on ? (state.dir > 0 ? " ▲" : " ▼") : "");
+        th.querySelector(".th-label").textContent = SCREEN_COLS.find(([k]) => k === th.dataset.sort)[1] + (on ? (state.dir > 0 ? " ▲" : " ▼") : "");
       });
       $("#sc-count").textContent = `Showing ${rows.length} of ${stocks.length}`;
       bindOpen($("#sc-body"));
     };
-    box.querySelectorAll("th.sortable").forEach((th) => th.addEventListener("click", () => {
+    box.querySelectorAll("th.sortable").forEach((th) => th.addEventListener("click", (e) => {
+      if (e.target.closest(".tip")) return; // the (i) button explains the column, it doesn't sort
       state.dir = state.sort === th.dataset.sort ? -state.dir : (th.dataset.sort === "symbol" ? 1 : -1);
       state.sort = th.dataset.sort;
       store.set("investiq.screener", state);
@@ -289,7 +292,7 @@
       <section id="overview" class="grid grid-2 section" style="margin-top:4px">
         <div class="card">
           <h2>InvestIQ verdict</h2>
-          <p class="sub">Automated summary of everything below</p>
+          ${why("A plain-English summary of this whole report, with the main strengths and risks.")}
           <p class="summary">${esc(r.summary)}</p>
           <div class="grid grid-2" style="margin-top:14px;gap:12px">
             <div><h3 style="margin-top:0">Strengths</h3><ul class="pill-list">${(sc.strengths.length ? sc.strengths : ["None stood out"]).map((s) => `<li><span class="icon good">+</span>${esc(s)}</li>`).join("")}</ul></div>
@@ -297,14 +300,15 @@
           </div>
         </div>
         <div class="card">
-          <h2>Scorecard</h2>
+          <h2>${T("Scorecard", "scorecard")}</h2>
+          ${why("How the stock rates on five things that matter, from 0 (weak) to 10 (strong).")}
           <div class="score-ring">
             <div class="score-num">${sc.overall ?? "—"}<span class="muted" style="font-size:18px">/10</span></div>
             <div><div class="score-rating">${esc(sc.rating)}</div><div class="muted" style="font-size:13px">Weighted: performance 25%, quality 25%, valuation 20%, safety 20%, momentum 10%</div></div>
           </div>
           <div class="score-bars">
             ${Object.entries(sc.scores).map(([k, v]) => `
-              <div class="score-bar"><span style="text-transform:capitalize">${k}</span>
+              <div class="score-bar"><span style="text-transform:capitalize">${T(k[0].toUpperCase() + k.slice(1), "score_" + k)}</span>
                 <div class="track"><div class="fill" style="width:${(v ?? 0) * 10}%"></div></div>
                 <span class="val">${v ?? "—"}</span></div>`).join("")}
           </div>
@@ -315,6 +319,7 @@
 
       <section class="card section">
         <h2>Key numbers</h2>
+        ${why("The most important facts about the company's size, price and profitability at a glance.")}
         <div class="stats" style="margin-top:10px">
           ${stat("Market cap", fmt.big(f.market_cap, cur), f.market_cap_category)}
           ${stat("P/E", fmt.n(f.pe, 1))}
@@ -326,9 +331,9 @@
           ${stat("Profit margin", fmt.pct(f.profit_margin_pct, 1, false))}
           ${stat("52W high", fmt.money(risk.week52.high, cur), fmt.pct(risk.week52.pct_from_high) + " from high")}
           ${stat("52W low", fmt.money(risk.week52.low, cur), fmt.pct(risk.week52.pct_from_low) + " from low")}
-          ${stat("1Y return", fmt.pct(trailing["1Y"]?.total_return_pct))}
+          ${stat("1Y return", fmt.pct(trailing["1Y"]?.total_return_pct), "", "total_return")}
           ${stat("10Y CAGR", fmt.pct(trailing["10Y"]?.cagr_pct))}
-          ${stat("Beta (3Y)", fmt.n(beta.beta, 2), "vs " + benchName)}
+          ${stat("Beta (3Y)", fmt.n(beta.beta, 2), "vs " + benchName, "beta")}
           ${stat("Risk level", esc(risk.risk_level))}
           ${stat("All-time high", fmt.money(perf.all_time_high.price, cur), fmt.date(perf.all_time_high.date))}
           ${stat("Fair value (mid)", val.fair_value ? fmt.money(val.fair_value.mid, cur) : "—", esc(val.verdict))}
@@ -342,10 +347,11 @@
 
       <section id="chart" class="card section">
         <h2>Price history</h2>
+        ${why("How the share price has moved over time - use the buttons to zoom in or out.")}
         <p class="sub">Adjusted for splits and dividends · data since ${fmt.date(perf.history_start)} (${perf.history_years} years)</p>
         <div class="toolbar">
           <div class="seg" id="range-seg">${RANGES.map(([l]) => `<button type="button" data-range="${l}">${l}</button>`).join("")}</div>
-          <label class="toggle"><input type="checkbox" id="t-sma50"> <span class="swatch" style="background:var(--series-3)"></span> SMA 50</label>
+          <label class="toggle"><input type="checkbox" id="t-sma50"> <span class="swatch" style="background:var(--series-3)"></span> SMA 50</label>${tip("sma")}
           <label class="toggle"><input type="checkbox" id="t-sma200"> <span class="swatch" style="background:var(--series-4)"></span> SMA 200</label>
           ${r.benchmark_chart ? `<label class="toggle"><input type="checkbox" id="t-index"> vs ${benchName} (rebased to 100)</label>` : ""}
         </div>
@@ -357,22 +363,24 @@
       <section id="performance" class="section grid grid-2">
         <div class="card">
           <h2>Returns</h2>
+          ${why("How much the stock gained or lost over different periods, compared with the market index.")}
           <p class="sub">Total return and annualised (CAGR) vs ${benchName}</p>
           <div class="table-wrap"><table>
-            <thead><tr><th>Period</th><th>Return</th><th>CAGR</th><th>${benchName}</th></tr></thead>
+            <thead><tr><th>Period</th><th>${T("Return", "total_return")}</th><th>${T("CAGR")}</th><th>${T(benchName, "benchmark")}</th></tr></thead>
             <tbody>${perf.trailing.map((t) => `<tr><td>${t.period}</td><td>${fmt.pctSpan(t.total_return_pct)}</td><td>${t.cagr_pct == null ? "—" : fmt.pct(t.cagr_pct)}</td><td>${fmt.pct(t.benchmark_return_pct)}</td></tr>`).join("")}</tbody>
           </table></div>
         </div>
         <div class="card">
           <h2>What your money would be worth</h2>
+          ${why("What a one-time investment or a monthly SIP in this stock would be worth today.")}
           <p class="sub">${fmt.money(10000, cur, 0)} invested once, N years ago</p>
           <div class="table-wrap"><table>
             <thead><tr><th>Invested</th><th>Worth today</th><th>Gain</th></tr></thead>
             <tbody>${perf.growth_of_10k.map((g) => `<tr><td>${g.years} year${g.years > 1 ? "s" : ""} ago</td><td>${fmt.money(g.value, cur, 0)}</td><td>${fmt.pctSpan((g.value / g.invested - 1) * 100, 0)}</td></tr>`).join("")}</tbody>
           </table></div>
-          <h3>Monthly SIP of ${fmt.money(5000, cur, 0)}</h3>
+          <h3>${T("Monthly SIP", "sip")} of ${fmt.money(5000, cur, 0)}</h3>
           <div class="table-wrap"><table>
-            <thead><tr><th>Duration</th><th>Invested</th><th>Worth today</th><th>XIRR</th></tr></thead>
+            <thead><tr><th>Duration</th><th>Invested</th><th>Worth today</th><th>${T("XIRR")}</th></tr></thead>
             <tbody>${perf.sip_backtests.map((s) => `<tr><td>${s.years} year${s.years > 1 ? "s" : ""}</td><td>${fmt.money(s.invested, cur, 0)}</td><td>${fmt.money(s.value, cur, 0)}</td><td>${fmt.pctSpan(s.xirr_pct)}</td></tr>`).join("")}</tbody>
           </table></div>
         </div>
@@ -380,6 +388,7 @@
 
       <section class="card section">
         <h2>Year-by-year returns</h2>
+        ${why("Whether the stock beat the index in each calendar year - consistency matters.")}
         <p class="sub">Calendar-year return vs ${benchName} · * partial year</p>
         <div class="legend"><span><span class="swatch" style="background:var(--series-1);height:10px"></span> ${esc(r.symbol)}</span><span><span class="swatch" style="background:var(--axis);height:10px"></span> ${benchName}</span></div>
         <div class="chart-box"><canvas id="year-chart" aria-label="Calendar year returns"></canvas></div>
@@ -387,23 +396,26 @@
 
       <section id="falls" class="section grid grid-2">
         <div class="card">
-          <h2>Falls from peak (drawdown)</h2>
-          <p class="sub">How far below its previous high the stock was on each day. Now: ${fmt.pct(risk.current_drawdown_pct)}</p>
+          <h2>${T("Falls from peak (drawdown)", "drawdown")}</h2>
+          ${why("How far below its high the stock was at each point - shows how painful the bad times were.")}
+          <p class="sub">${risk.current_drawdown_pct ? `Right now the stock is ${fmt.pct(Math.abs(risk.current_drawdown_pct), 1, false)} below its all-time high` : "The stock is at its all-time high"}</p>
           <div class="chart-box short"><canvas id="dd-chart" aria-label="Drawdown chart"></canvas></div>
         </div>
         <div class="card">
           <h2>Risk metrics</h2>
-          <p class="sub">Risk-free rate assumed ${fmt.pct(risk.risk_free_rate_pct, 1, false)}</p>
-          <div class="table-wrap"><table>
-            <thead><tr><th>Window</th><th>Annual return</th><th>Volatility</th><th>Max fall</th><th>Sharpe</th></tr></thead>
-            <tbody>${Object.entries(risk.windows).map(([k, w]) => `<tr><td>${k}</td><td>${fmt.pct(w.annual_return_pct)}</td><td>${fmt.pct(w.volatility_pct, 1, false)}</td><td>${fmt.pct(w.max_drawdown_pct)}</td><td>${fmt.n(w.sharpe, 2)}</td></tr>`).join("")}</tbody>
+          ${why("How bumpy the ride has been, and whether the return was worth the risk.")}
+          <p class="sub">${T("Risk-free rate")} assumed ${fmt.pct(risk.risk_free_rate_pct, 1, false)}</p>
+          <div class="table-wrap"><table class="compact">
+            <thead><tr><th>Window</th><th>${T("CAGR")}</th><th>${T("Volatility")}</th><th>${T("Max fall")}</th><th>${T("Sharpe")}</th><th>${T("Sortino")}</th><th>${T("VaR 95%", "var")}</th></tr></thead>
+            <tbody>${Object.entries(risk.windows).map(([k, w]) => `<tr><td>${k}</td><td>${fmt.pct(w.annual_return_pct)}</td><td>${fmt.pct(w.volatility_pct, 1, false)}</td><td>${fmt.pct(w.max_drawdown_pct)}</td><td>${fmt.n(w.sharpe, 2)}</td><td>${fmt.n(w.sortino, 2)}</td><td>${fmt.pct(w.var_95_daily_pct, 1)}</td></tr>`).join("")}</tbody>
           </table></div>
-          <p class="sub" style="margin-top:10px">Beta: ${Object.entries(risk.beta || {}).map(([k, b]) => `${k} ${fmt.n(b.beta, 2)}`).join(" · ") || "—"} (1.0 = moves with ${benchName})</p>
+          <p class="sub" style="margin-top:10px">${T("Beta")}: ${Object.entries(risk.beta || {}).map(([k, b]) => `${k} ${fmt.n(b.beta, 2)}`).join(" · ") || "—"} (1.0 = moves with ${benchName})</p>
         </div>
       </section>
 
       <section class="card section">
         <h2>Biggest crashes and recoveries</h2>
+        ${why("The worst falls in the stock's history, and how long it took to recover each time.")}
         <p class="sub">Largest peak-to-bottom falls of 10% or more</p>
         <div class="table-wrap"><table>
           <thead><tr><th>Peak</th><th class="l">Bottom</th><th>Fall</th><th>Time to bottom</th><th>Recovered</th><th>Time under water</th></tr></thead>
@@ -426,6 +438,7 @@
       <section id="fundamentals" class="section grid grid-2">
         <div class="card">
           <h2>Revenue & profit</h2>
+          ${why("Whether the business itself is growing its sales and earnings.")}
           <p class="sub">Annual statements · revenue CAGR ${fmt.pct(f.revenue_cagr_pct)} · profit CAGR ${fmt.pct(f.profit_cagr_pct)}</p>
           ${f.statements.length ? `
             <div class="legend"><span><span class="swatch" style="background:var(--series-1);height:10px"></span> Revenue</span><span><span class="swatch" style="background:var(--series-2);height:10px"></span> Net income</span></div>
@@ -433,9 +446,10 @@
         </div>
         <div class="card">
           <h2>Financial health</h2>
+          ${why("Whether the company has manageable debt, enough cash and healthy margins.")}
           <div class="table-wrap"><table><tbody>
             ${row("Forward P/E", fmt.n(f.forward_pe, 1))}
-            ${row("PEG ratio", fmt.n(f.peg, 2))}
+            ${row("PEG ratio", fmt.n(f.peg, 2), "peg")}
             ${row("Book value / share", fmt.money(f.book_value_per_share, cur))}
             ${row("Operating margin", fmt.pct(f.operating_margin_pct, 1, false))}
             ${row("Return on assets", fmt.pct(f.roa_pct, 1, false))}
@@ -443,8 +457,8 @@
             ${row("Total debt", fmt.big(f.total_debt, cur))}
             ${row("Cash", fmt.big(f.total_cash, cur))}
             ${row("Free cash flow", fmt.big(f.free_cash_flow, cur))}
-            ${row("Revenue growth (latest)", fmt.pct(f.revenue_growth_pct))}
-            ${row("Earnings growth (latest)", fmt.pct(f.earnings_growth_pct))}
+            ${row("Revenue growth (latest)", fmt.pct(f.revenue_growth_pct), "revenue")}
+            ${row("Earnings growth (latest)", fmt.pct(f.earnings_growth_pct), "net_income")}
             ${row("Employees", f.employees ? fmt.n(f.employees, 0) : "—")}
           </tbody></table></div>
         </div>
@@ -454,14 +468,15 @@
       ${sections.financials(r)}
 
       <section id="valuation" class="card section">
-        <h2>Fair value estimate</h2>
+        <h2>${T("Fair value estimate", "fair_value")}</h2>
+        ${why("An estimate of what one share is really worth, compared with what it costs today.")}
         <p class="sub">Growth assumption ${fmt.pct(val.growth_assumption_pct, 1, false)}${val.discount_rate_pct ? ` · discount rate ${fmt.pct(val.discount_rate_pct, 0, false)}` : ""}</p>
         ${val.fair_value ? `
-          <div><span class="verdict">${esc(val.verdict)}</span> <span class="muted">· margin of safety ${fmt.pct(val.margin_of_safety_pct)}</span></div>
+          <div><span class="verdict">${esc(val.verdict)}</span> <span class="muted">· ${T("margin of safety", "margin_of_safety")} ${fmt.pct(val.margin_of_safety_pct)}</span></div>
           ${fairRange(val.fair_value, q.price, cur)}` : `<p class="muted">${esc(val.verdict)}</p>`}
         <div class="table-wrap"><table>
           <thead><tr><th>Method</th><th>Value</th><th>vs price</th><th style="text-align:left">How it works</th></tr></thead>
-          <tbody>${val.methods.map((m) => `<tr><td>${esc(m.method)}</td><td>${fmt.money(m.value, cur)}</td><td>${fmt.pctSpan(m.upside_pct)}</td><td class="wrap">${esc(m.note)}</td></tr>`).join("")}</tbody>
+          <tbody>${val.methods.map((m) => `<tr><td>${T(m.method)}</td><td>${fmt.money(m.value, cur)}</td><td>${fmt.pctSpan(m.upside_pct)}</td><td class="wrap">${esc(m.note)}</td></tr>`).join("")}</tbody>
         </table></div>
         ${f.analyst.analysts ? `<p class="sub" style="margin-top:10px">Analysts (${f.analyst.analysts}): target ${fmt.money(f.analyst.target_low, cur, 0)} – ${fmt.money(f.analyst.target_high, cur, 0)}, consensus “${esc(f.analyst.recommendation || "n/a")}”.</p>` : ""}
         <p class="disclaimer">${esc(val.note || "")}</p>
@@ -471,11 +486,12 @@
       <section id="future" class="section grid grid-2">
         <div class="card">
           <h2>Future price scenarios</h2>
+          ${why("A range of where the price could be in 1-10 years, from a bad case to a good case.")}
           <p class="sub">Expected return ${fmt.pct(proj.assumptions.expected_return_pct, 1, false)}/yr (own ${proj.assumptions.lookback_years}y history ${fmt.pct(proj.assumptions.historical_cagr_pct)} blended with market ${fmt.pct(proj.assumptions.long_run_market_return_pct, 0, false)}) · volatility ${fmt.pct(proj.assumptions.volatility_pct, 0, false)}</p>
           <div class="legend"><span><span class="swatch" style="background:var(--series-1)"></span> Base (median)</span><span><span class="swatch" style="background:var(--band);height:10px"></span> Bear–bull range (10th–90th percentile)</span></div>
           <div class="chart-box"><canvas id="fan-chart" aria-label="Future scenarios"></canvas></div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Horizon</th><th>Bear</th><th>Base</th><th>Bull</th><th>Chance of loss</th></tr></thead>
+            <thead><tr><th>Horizon</th><th>${T("Bear", "bear_bull")}</th><th>Base</th><th>Bull</th><th>${T("Chance of loss")}</th></tr></thead>
             <tbody>${proj.horizons.map((h) => `<tr><td>${h.years} year${h.years > 1 ? "s" : ""}</td>
               <td>${fmt.money(h.bear.price, cur, 0)} <span class="muted">${fmt.pct(h.bear.cagr_pct)}/yr</span></td>
               <td>${fmt.money(h.base.price, cur, 0)} <span class="muted">${fmt.pct(h.base.cagr_pct)}/yr</span></td>
@@ -486,6 +502,7 @@
         </div>
         <div class="card">
           <h2>Investment planner</h2>
+          ${why("What your money could grow to if the stock follows the bad, middle or good scenario.")}
           <p class="sub">Project a lump sum and/or monthly SIP using this stock's scenario returns</p>
           <div class="calc">
             <label>Lump sum (${fmt.sym(cur).trim() || cur})<input id="c-lump" type="number" min="0" step="1000" value="${cur === "INR" ? 100000 : 1000}"></label>
@@ -500,15 +517,16 @@
       <section id="technicals" class="section grid grid-2">
         <div class="card">
           <h2>Technical signals</h2>
-          <p class="sub">Trend: <strong>${esc(r.technicals.trend)}</strong> · ${r.technicals.bullish_signals} bullish / ${r.technicals.bearish_signals} bearish</p>
+          ${why("What recent price trends and momentum suggest about the short term.")}
+          <p class="sub">${T("Trend")}: <strong>${esc(r.technicals.trend)}</strong> · ${r.technicals.bullish_signals} bullish / ${r.technicals.bearish_signals} bearish</p>
           <div class="table-wrap"><table>
             <thead><tr><th>Indicator</th><th>Value</th><th>Signal</th><th style="text-align:left">Meaning</th></tr></thead>
-            <tbody>${r.technicals.signals.map((s) => `<tr><td>${esc(s.indicator)}</td><td>${typeof s.value === "number" ? fmt.n(s.value, 2) : esc(s.value)}</td><td class="stance-${s.stance}">${stanceLabel(s.stance)}</td><td class="wrap">${esc(s.note)}</td></tr>`).join("")}</tbody>
+            <tbody>${r.technicals.signals.map((s) => `<tr><td>${T(s.indicator)}</td><td>${typeof s.value === "number" ? fmt.n(s.value, 2) : esc(s.value)}</td><td class="stance-${s.stance}">${stanceLabel(s.stance)}</td><td class="wrap">${esc(s.note)}</td></tr>`).join("")}</tbody>
           </table></div>
         </div>
         <div class="card">
-          <h2>Support & resistance</h2>
-          <p class="sub">Price levels where buying or selling has recently kicked in</p>
+          <h2>${T("Support", "support")} & ${T("resistance", "resistance")}</h2>
+          ${why("Price levels where the stock has recently tended to stop falling or stop rising.")}
           <div class="table-wrap"><table><tbody>
             ${row("Resistance (6M high)", fmt.money(r.technicals.levels.resistance_6m, cur))}
             ${row("Resistance (3M high)", fmt.money(r.technicals.levels.resistance_3m, cur))}
@@ -593,10 +611,11 @@
     calc();
   }
 
-  function stat(label, value, sub) {
-    return `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div>${sub ? `<div class="muted" style="font-size:12px">${sub}</div>` : ""}</div>`;
+  // label: plain text; key: optional glossary key when the label alone can't be matched.
+  function stat(label, value, sub, key) {
+    return `<div class="stat"><div class="label">${T(label, key)}</div><div class="value">${value}</div>${sub ? `<div class="muted" style="font-size:12px">${sub}</div>` : ""}</div>`;
   }
-  function row(label, value) { return `<tr><td>${label}</td><td>${value}</td></tr>`; }
+  function row(label, value, key) { return `<tr><td>${T(label, key)}</td><td>${value}</td></tr>`; }
   function stanceLabel(s) { return { bullish: "▲ Bullish", bearish: "▼ Bearish", neutral: "● Neutral" }[s] || s; }
   function movesTable(title, rows) {
     return `<div><h3>${title}</h3><div class="table-wrap"><table><tbody>${rows.map((m) => `<tr><td>${fmt.date(m.date)}</td><td>${fmt.pctSpan(m.change_pct, 2)}</td></tr>`).join("")}</tbody></table></div></div>`;
@@ -620,6 +639,7 @@
     app.innerHTML = `
       <section class="card">
         <h2>Compare stocks</h2>
+        ${why("Put stocks side by side to see which has performed better and looks healthier.")}
         <p class="sub">Add 2 to 5 stocks to compare returns, risk, valuation and scores side by side</p>
         <form id="cmp-form" class="toolbar" autocomplete="off">
           <div class="chips" style="justify-content:flex-start;margin:0">${symbols.map((s, i) => `<button type="button" class="chip" data-rm="${i}">${esc(s)}<span class="x">×</span></button>`).join("")}</div>
@@ -660,7 +680,7 @@
       ["Dividend yield", (s) => fmt.pct(s.dividend_yield_pct, 2, false)],
       ["Fair value (mid)", (s) => fmt.money(s.fair_value_mid, s.currency)],
       ["Valuation", (s) => esc(s.valuation_verdict)],
-      ["InvestIQ score", (s) => `<strong>${s.score ?? "—"}</strong> <span class="muted">${esc(s.rating)}</span>`],
+      ["Score", (s) => `<strong>${s.score ?? "—"}</strong> <span class="muted">${esc(s.rating)}</span>`],
     ];
     let range = "5Y";
     body.innerHTML = `
@@ -675,7 +695,7 @@
       <section class="card section">
         <div class="table-wrap"><table>
           <thead><tr><th>Metric</th>${ok.map((s) => `<th><a href="#/stock/${encodeURIComponent(s.symbol)}">${esc(s.symbol)}</a></th>`).join("")}</tr></thead>
-          <tbody>${metrics.map(([label, f]) => `<tr><td>${label}</td>${ok.map((s) => `<td>${f(s)}</td>`).join("")}</tr>`).join("")}</tbody>
+          <tbody>${metrics.map(([label, f]) => `<tr><td>${T(label)}</td>${ok.map((s) => `<td>${f(s)}</td>`).join("")}</tr>`).join("")}</tbody>
         </table></div>
       </section>
       ${ok.length ? `<p class="disclaimer">${esc(ok[0].disclaimer)}</p>` : ""}`;

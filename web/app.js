@@ -37,18 +37,18 @@
     route(); // re-render charts with the new palette
   });
 
-  /* ---------------- api ---------------- */
-  const cache = new Map();
-  async function api(path) {
-    if (cache.has(path)) return cache.get(path);
-    const res = await fetch(path);
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.detail || `Request failed (${res.status})`);
-    cache.set(path, body);
-    return body;
-  }
-
-  fetch("/api/health").then((r) => r.json()).then((h) => { $("#demo-banner").hidden = !h.demo; }).catch(() => {});
+  /* ---------------- data ---------------- */
+  const data = window.investiqData;
+  let health = null;
+  data.health().then((h) => {
+    health = h;
+    $("#demo-banner").hidden = !h.demo;
+    if (h.static) {
+      $("#static-banner").hidden = false;
+      $("#static-date").textContent = fmt.date(h.generated_at);
+      $("#static-count").textContent = h.count;
+    }
+  }).catch(() => {});
 
   /* ---------------- search ---------------- */
   const input = $("#search-input");
@@ -70,7 +70,7 @@
     const q = input.value.trim();
     if (!q) { results = []; renderResults(); return; }
     timer = setTimeout(async () => {
-      try { results = (await api(`/api/search?q=${encodeURIComponent(q)}`)).results; } catch { results = []; }
+      try { results = await data.search(q); } catch { results = []; }
       active = -1;
       renderResults();
     }, 200);
@@ -110,7 +110,7 @@
   window.addEventListener("hashchange", () => { window.scrollTo(0, 0); route(); });
 
   /* ---------------- home ---------------- */
-  const POPULAR = ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "BHARTIARTL", "ITC", "SBIN", "LT", "TATAMOTORS", "AAPL", "MSFT", "NVDA"];
+  const POPULAR = ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "BHARTIARTL", "ITC", "SBIN", "LT", "ETERNAL", "AAPL", "MSFT", "NVDA"];
 
   function renderHome() {
     const wl = watchlist.all();
@@ -129,6 +129,7 @@
         </div>
         ${wl.length >= 2 ? `<p class="sub" style="margin-top:12px"><a href="#/compare/${wl.slice(0, 5).map((w) => encodeURIComponent(w.symbol)).join(",")}">Compare your watchlist →</a></p>` : ""}
       </section>` : ""}
+      <section id="all-stocks" class="card section" hidden></section>
       <section class="grid grid-3 features">
         ${[
           ["Performance", "Returns over 1 week to 20 years, CAGR, year-by-year results vs the index, and what ₹10,000 or a monthly SIP would have become."],
@@ -140,6 +141,28 @@
         ].map(([t, d]) => `<div class="card"><h2>${t}</h2><p>${d}</p></div>`).join("")}
       </section>`;
     bindOpen();
+    renderAllStocks();
+  }
+
+  async function renderAllStocks() {
+    const stocks = await data.listAll().catch(() => null);
+    const box = $("#all-stocks");
+    if (!stocks || !box) return;
+    box.hidden = false;
+    box.innerHTML = `
+      <h2>All researched stocks</h2>
+      <p class="sub">${stocks.length} stocks · click a row for the full report</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Stock</th><th>Price</th><th>1 day</th><th>1 year</th><th>Valuation</th><th>Score</th></tr></thead>
+        <tbody>${stocks.map((s) => `<tr class="click" data-open="${esc(s.symbol)}">
+          <td><strong>${esc(s.symbol)}</strong> <span class="muted">${esc(s.name)}</span></td>
+          <td>${fmt.money(s.price, s.currency)}</td>
+          <td>${fmt.pctSpan(s.change_pct, 2)}</td>
+          <td>${fmt.pctSpan(s.return_1y_pct)}</td>
+          <td>${esc(s.valuation_verdict || "—")}</td>
+          <td><strong>${s.score ?? "—"}</strong> <span class="muted">${esc(s.rating || "")}</span></td></tr>`).join("")}</tbody>
+      </table></div>`;
+    bindOpen(box);
   }
 
   function bindOpen(root = app) {
@@ -169,7 +192,7 @@
   async function renderStock(query) {
     loading(`Researching ${query}…`);
     let r;
-    try { r = await api(`/api/report/${encodeURIComponent(query)}`); } catch (err) { return showError(err); }
+    try { r = await data.report(query); } catch (err) { return showError(err); }
     if (!location.hash.includes(encodeURIComponent(query)) && !location.hash.includes(query)) return; // navigated away
     document.title = `${r.symbol} · InvestIQ`;
 
@@ -550,10 +573,10 @@
       return;
     }
     body.innerHTML = `<div class="loading"><div class="spinner"></div>Comparing ${symbols.length} stocks…</div>`;
-    let data;
-    try { data = await api(`/api/compare?symbols=${symbols.map(encodeURIComponent).join(",")}`); } catch (err) { body.innerHTML = `<div class="error">${esc(err.message)}</div>`; return; }
-    const ok = data.stocks.filter((s) => !s.error);
-    const bad = data.stocks.filter((s) => s.error);
+    let stocks;
+    try { stocks = await data.compare(symbols); } catch (err) { body.innerHTML = `<div class="error">${esc(err.message)}</div>`; return; }
+    const ok = stocks.filter((s) => !s.error);
+    const bad = stocks.filter((s) => s.error);
     const metrics = [
       ["Price", (s) => fmt.money(s.price, s.currency)],
       ["Market cap", (s) => fmt.big(s.market_cap, s.currency)],
@@ -573,7 +596,7 @@
     ];
     let range = "5Y";
     body.innerHTML = `
-      ${bad.length ? `<p class="down">Could not load: ${bad.map((b) => esc(b.query)).join(", ")}</p>` : ""}
+      ${bad.map((b) => `<p class="down">Could not load ${esc(b.query)}: ${esc(b.error)}</p>`).join("")}
       <section class="card section">
         <h2>Growth of 100</h2>
         <p class="sub">Each stock rebased to 100 at the start of the period</p>
@@ -587,7 +610,7 @@
           <tbody>${metrics.map(([label, f]) => `<tr><td>${label}</td>${ok.map((s) => `<td>${f(s)}</td>`).join("")}</tr>`).join("")}</tbody>
         </table></div>
       </section>
-      <p class="disclaimer">${esc(data.disclaimer)}</p>`;
+      ${ok.length ? `<p class="disclaimer">${esc(ok[0].disclaimer)}</p>` : ""}`;
     const draw = () => {
       document.querySelectorAll("#cmp-seg button").forEach((b) => b.classList.toggle("on", b.dataset.range === range));
       const last = ok.map((s) => s.chart.dates[s.chart.dates.length - 1]).sort().pop();

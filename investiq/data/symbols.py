@@ -50,7 +50,7 @@ POPULAR_INDIA = {
     "APOLLOHOSP": "Apollo Hospitals",
     "DMART": "Avenue Supermarts (DMart)",
     "PIDILITIND": "Pidilite Industries",
-    "ZOMATO": "Zomato",
+    "ETERNAL": "Eternal (Zomato)",
     "IRCTC": "Indian Railway Catering & Tourism",
     "HAL": "Hindustan Aeronautics",
     "BEL": "Bharat Electronics",
@@ -129,7 +129,7 @@ def resolve_candidates(raw: str) -> list[str]:
     if s in POPULAR_US:
         return [s]
     local = search_local(raw, limit=1)
-    if local and local[0]["name"].upper().startswith(raw.strip().upper()):
+    if local and (local[0]["name"].upper().startswith(raw.strip().upper()) or len(s) >= 3):
         return [local[0]["symbol"]]
     # Unknown bare ticker: try NSE first (primary use case), then as-is (US).
     return [s + ".NS", s, s + ".BO"]

@@ -44,6 +44,7 @@ GitHub Pages can't run Python, so the workflow in `.github/workflows/pages.yml` 
 - It publishes them with the dashboard to https://atulswain.github.io/InvestIQ-AI/.
 
 One-time setup: go to repo **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**.
+If the site shows a "InvestIQ is almost live" setup page (the root `index.html`), this setting hasn't been changed yet.
 To add stocks to the site, edit `POPULAR_INDIA` / `POPULAR_US` in `investiq/data/symbols.py`.
 
 You can build the site yourself with `python -m investiq.build_static --out site` (add `--demo` to work offline).

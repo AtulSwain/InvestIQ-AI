@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- Shown only while GitHub Pages is set to "Deploy from a branch".
+     Once Settings -> Pages -> Source is "GitHub Actions", the workflow in
+     .github/workflows/pages.yml publishes the real dashboard instead. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>InvestIQ setup</title>
+  <style>
+    :root { --bg: #f9f9f7; --card: #fcfcfb; --text: #0b0b0b; --muted: #52514e; --border: rgba(11,11,11,.1); --accent: #2a78d6; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0d0d0d; --card: #1a1a19; --text: #fff; --muted: #c3c2b7; --border: rgba(255,255,255,.1); --accent: #3987e5; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 640px; margin: 48px auto; padding: 0 16px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    p, li { color: var(--muted); }
+    ol { padding-left: 20px; }
+    li { margin: 8px 0; }
+    strong { color: var(--text); }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>InvestIQ is almost live</h1>
+      <p>This site is still being published straight from the repository files. To switch it to the InvestIQ dashboard:</p>
+      <ol>
+        <li>Open <a href="https://github.com/AtulSwain/InvestIQ-AI/settings/pages">Settings → Pages</a>.</li>
+        <li>Under <strong>Build and deployment → Source</strong>, choose <strong>GitHub Actions</strong>.</li>
+        <li>Open the <a href="https://github.com/AtulSwain/InvestIQ-AI/actions/workflows/pages.yml">Publish to GitHub Pages</a> workflow and click <strong>Run workflow</strong>.</li>
+        <li>Wait about 5 minutes, then reload this page.</li>
+      </ol>
+    </div>
+  </main>
+</body>
+</html>

@@ -80,6 +80,7 @@ def test_projection_percentiles_are_ordered(provider):
 def test_symbol_resolution():
     assert resolve_candidates("reliance")[0] == "RELIANCE.NS"
     assert resolve_candidates("Infosys")[0] == "INFY.NS"
+    assert resolve_candidates("zomato") == ["ETERNAL.NS"]
     assert resolve_candidates("AAPL") == ["AAPL"]
     assert resolve_candidates("infy.bo") == ["INFY.BO"]
     assert benchmark_for("TCS.NS") == "^NSEI"

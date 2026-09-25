@@ -36,6 +36,19 @@ Then search for `Reliance`, `TCS`, `HDFCBANK`, `INFY.NS`, `AAPL` and so on.
 
 Useful options: `--port 8080`, `--host 0.0.0.0` (open it from your phone on the same Wi-Fi), `--no-browser`.
 
+## Website (GitHub Pages)
+
+GitHub Pages can't run Python, so the workflow in `.github/workflows/pages.yml` does the work instead:
+- It runs every weekday after the NSE close (and on every push to `main`).
+- It builds full reports for about 60 popular stocks (the NIFTY 50 names, a few other popular Indian stocks and large US stocks).
+- It publishes them with the dashboard to https://atulswain.github.io/InvestIQ-AI/.
+
+One-time setup: go to repo **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**.
+To add stocks to the site, edit `POPULAR_INDIA` / `POPULAR_US` in `investiq/data/symbols.py`.
+
+You can build the site yourself with `python -m investiq.build_static --out site` (add `--demo` to work offline).
+The local app (`python -m investiq`) can still research **any** stock on demand.
+
 ## API
 
 The dashboard is built on a JSON API you can use directly (docs at `/docs`):
@@ -62,6 +75,7 @@ investiq/
   analysis/             performance, risk, technicals, fundamentals,
                         valuation, projection, scorecard, report
   api.py                FastAPI app
+  build_static.py       static site builder for GitHub Pages
 web/                    single-page dashboard (vanilla JS + Chart.js, vendored)
 tests/                  pytest suite (runs offline)
 ```

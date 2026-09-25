@@ -6,9 +6,9 @@
   <title>InvestIQ</title>
   <meta name="description" content="Personal stock research: performance, risk, valuation and future scenarios for any stock.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232a78d6'/><path d='M7 22l6-7 5 4 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
-  <link rel="stylesheet" href="/static/styles.css">
-  <script src="/static/vendor/chart.umd.js"></script>
-  <script src="/static/vendor/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <link rel="stylesheet" href="static/styles.css">
+  <script src="static/vendor/chart.umd.js"></script>
+  <script src="static/vendor/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -31,14 +31,21 @@
     Demo mode: showing synthetic data, not real prices. Start without <code>--demo</code> for live market data.
   </div>
 
+  <div id="static-banner" class="notice" hidden>
+    Daily snapshot of <span id="static-count"></span> stocks, last updated <span id="static-date"></span>.
+    Run InvestIQ on your computer to research any stock with live prices.
+  </div>
+
   <main id="app"></main>
 
   <footer class="footer">
     InvestIQ is a research tool, not investment advice. Data from Yahoo Finance may be delayed or incomplete.
   </footer>
 
-  <script src="/static/format.js"></script>
-  <script src="/static/charts.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="static/config.js"></script>
+  <script src="static/format.js"></script>
+  <script src="static/data.js"></script>
+  <script src="static/charts.js"></script>
+  <script src="static/app.js"></script>
 </body>
 </html>

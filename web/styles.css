@@ -123,6 +123,9 @@ code { font-size: 0.9em; }
 }
 
 .banner { background: #fff4d6; color: #5a4300; padding: 8px 24px; font-size: 14px; }
+.notice { background: var(--surface-2); color: var(--text-secondary); border-bottom: 1px solid var(--border); padding: 8px 24px; font-size: 14px; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--surface-2); }
 :root[data-theme="dark"] .banner { background: #3a2f10; color: #f5dd9a; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .banner { background: #3a2f10; color: #f5dd9a; } }
 
@@ -270,7 +273,7 @@ tr:last-child td { border-bottom: none; }
   .search { order: 3; flex-basis: 100%; max-width: none; }
   .section-nav { top: 104px; }
   main { padding: 16px; }
-  .banner { padding: 8px 16px; }
+  .banner, .notice { padding: 8px 16px; }
   .price { font-size: 28px; }
   .chart-box { height: 260px; }
   .chart-box.tall { height: 300px; }

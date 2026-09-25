@@ -144,25 +144,80 @@
     renderAllStocks();
   }
 
+  const SCREEN_COLS = [
+    ["symbol", "Stock", (s) => `<strong>${esc(s.symbol)}</strong> <span class="muted">${esc(s.name)}</span>`],
+    ["price", "Price", (s) => fmt.money(s.price, s.currency)],
+    ["change_pct", "1 day", (s) => fmt.pctSpan(s.change_pct, 2)],
+    ["return_1y_pct", "1 year", (s) => fmt.pctSpan(s.return_1y_pct)],
+    ["cagr_5y_pct", "5Y CAGR", (s) => fmt.pct(s.cagr_5y_pct)],
+    ["pe", "P/E", (s) => fmt.n(s.pe, 1)],
+    ["roe_pct", "ROE", (s) => fmt.pct(s.roe_pct, 1, false)],
+    ["debt_to_equity", "D/E", (s) => fmt.n(s.debt_to_equity, 2)],
+    ["dividend_yield_pct", "Div yield", (s) => fmt.pct(s.dividend_yield_pct, 2, false)],
+    ["margin_of_safety_pct", "To fair value", (s) => `${fmt.pctSpan(s.margin_of_safety_pct, 0)}`],
+    ["checklist_passed", "Checklist", (s) => s.checklist_total ? `${s.checklist_passed}/${s.checklist_total}` : "—"],
+    ["score", "Score", (s) => `<strong>${s.score ?? "—"}</strong> <span class="muted">${esc(s.rating || "")}</span>`],
+  ];
+
   async function renderAllStocks() {
     const stocks = await data.listAll().catch(() => null);
     const box = $("#all-stocks");
     if (!stocks || !box) return;
     box.hidden = false;
+    const sectors = [...new Set(stocks.map((s) => s.sector).filter(Boolean))].sort();
+    const state = store.get("investiq.screener", { sort: "score", dir: -1 });
     box.innerHTML = `
-      <h2>All researched stocks</h2>
-      <p class="sub">${stocks.length} stocks · click a row for the full report</p>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Stock</th><th>Price</th><th>1 day</th><th>1 year</th><th>Valuation</th><th>Score</th></tr></thead>
-        <tbody>${stocks.map((s) => `<tr class="click" data-open="${esc(s.symbol)}">
-          <td><strong>${esc(s.symbol)}</strong> <span class="muted">${esc(s.name)}</span></td>
-          <td>${fmt.money(s.price, s.currency)}</td>
-          <td>${fmt.pctSpan(s.change_pct, 2)}</td>
-          <td>${fmt.pctSpan(s.return_1y_pct)}</td>
-          <td>${esc(s.valuation_verdict || "—")}</td>
-          <td><strong>${s.score ?? "—"}</strong> <span class="muted">${esc(s.rating || "")}</span></td></tr>`).join("")}</tbody>
-      </table></div>`;
-    bindOpen(box);
+      <h2>Stock screener</h2>
+      <p class="sub">${stocks.length} researched stocks · click a column to sort, a row for the full report · "To fair value" is how far the price would move to reach the estimated fair value</p>
+      <div class="filters">
+        <input id="sc-text" type="search" placeholder="Filter by name" aria-label="Filter by name">
+        <select id="sc-market" aria-label="Market"><option value="">All markets</option><option value="INR">India</option><option value="USD">US</option></select>
+        <select id="sc-sector" aria-label="Sector"><option value="">All sectors</option>${sectors.map((x) => `<option>${esc(x)}</option>`).join("")}</select>
+        <select id="sc-value" aria-label="Valuation"><option value="">Any valuation</option><option value="under">Below fair value</option><option value="over">Above fair value</option></select>
+        <select id="sc-score" aria-label="Minimum score"><option value="0">Any score</option><option value="5">Score 5+</option><option value="6">Score 6+</option><option value="7">Score 7+</option></select>
+      </div>
+      <div class="table-wrap"><table class="compact">
+        <thead><tr>${SCREEN_COLS.map(([k, l]) => `<th class="sortable" data-sort="${k}">${l}</th>`).join("")}</tr></thead>
+        <tbody id="sc-body"></tbody>
+      </table></div>
+      <p class="sub" id="sc-count" style="margin-top:8px"></p>`;
+    const draw = () => {
+      const text = $("#sc-text").value.trim().toUpperCase();
+      const market = $("#sc-market").value;
+      const sector = $("#sc-sector").value;
+      const value = $("#sc-value").value;
+      const minScore = +$("#sc-score").value;
+      const rows = stocks.filter((s) =>
+        (!text || s.symbol.includes(text) || s.name.toUpperCase().includes(text)) &&
+        (!market || s.currency === market) &&
+        (!sector || s.sector === sector) &&
+        (!value || (value === "under" ? (s.margin_of_safety_pct ?? -1) > 0 : (s.margin_of_safety_pct ?? 1) < 0)) &&
+        (s.score ?? 0) >= minScore);
+      rows.sort((a, b) => {
+        const x = a[state.sort], y = b[state.sort];
+        if (x == null) return 1;
+        if (y == null) return -1;
+        return (typeof x === "string" ? x.localeCompare(y) : x - y) * state.dir;
+      });
+      $("#sc-body").innerHTML = rows.map((s) => `<tr class="click" data-open="${esc(s.symbol)}">${SCREEN_COLS.map(([, , f]) => `<td>${f(s)}</td>`).join("")}</tr>`).join("")
+        || `<tr><td colspan="${SCREEN_COLS.length}" class="muted">No stocks match these filters</td></tr>`;
+      box.querySelectorAll("th.sortable").forEach((th) => {
+        const on = th.dataset.sort === state.sort;
+        th.classList.toggle("sorted", on);
+        th.setAttribute("aria-sort", on ? (state.dir > 0 ? "ascending" : "descending") : "none");
+        th.textContent = SCREEN_COLS.find(([k]) => k === th.dataset.sort)[1] + (on ? (state.dir > 0 ? " ▲" : " ▼") : "");
+      });
+      $("#sc-count").textContent = `Showing ${rows.length} of ${stocks.length}`;
+      bindOpen($("#sc-body"));
+    };
+    box.querySelectorAll("th.sortable").forEach((th) => th.addEventListener("click", () => {
+      state.dir = state.sort === th.dataset.sort ? -state.dir : (th.dataset.sort === "symbol" ? 1 : -1);
+      state.sort = th.dataset.sort;
+      store.set("investiq.screener", state);
+      draw();
+    }));
+    ["#sc-text", "#sc-market", "#sc-sector", "#sc-value", "#sc-score"].forEach((sel) => $(sel).addEventListener("input", draw));
+    draw();
   }
 
   function bindOpen(root = app) {
@@ -227,7 +282,7 @@
       </section>
 
       <nav class="section-nav" aria-label="Report sections">
-        ${[["overview", "Overview"], ["chart", "Chart"], ["performance", "Performance"], ["falls", "Rises & falls"], ["fundamentals", "Fundamentals"], ["valuation", "Fair value"], ["future", "Future"], ["technicals", "Technicals"]]
+        ${[["overview", "Overview"], ["decision", "Buy checklist"], ["chart", "Chart"], ["performance", "Performance"], ["falls", "Rises & falls"], ["breakdown", "Monthly & seasonal"], ["fundamentals", "Fundamentals"], ["financials", "Financials"], ["valuation", "Valuation"], ["future", "Future"], ["dividends", "Dividends"], ["technicals", "Technicals"]]
           .map(([id, t]) => `<a href="#" data-jump="${id}">${t}</a>`).join("")}
       </nav>
 
@@ -256,6 +311,8 @@
         </div>
       </section>
 
+      ${sections.decision(r)}
+
       <section class="card section">
         <h2>Key numbers</h2>
         <div class="stats" style="margin-top:10px">
@@ -275,6 +332,11 @@
           ${stat("Risk level", esc(risk.risk_level))}
           ${stat("All-time high", fmt.money(perf.all_time_high.price, cur), fmt.date(perf.all_time_high.date))}
           ${stat("Fair value (mid)", val.fair_value ? fmt.money(val.fair_value.mid, cur) : "—", esc(val.verdict))}
+          ${stat("Buy checklist", `${r.checklist.passed}/${r.checklist.evaluated}`, "checks passed")}
+          ${stat("Piotroski F-Score", r.financials.piotroski ? `${r.financials.piotroski.score}/${r.financials.piotroski.out_of}` : "—", r.financials.piotroski ? esc(r.financials.piotroski.label) : "")}
+          ${stat("EV / EBITDA", fmt.n(val.multiples?.ev_ebitda, 1))}
+          ${stat("ROCE", fmt.pct(r.financials.years?.at(-1)?.roce_pct, 1, false))}
+          ${stat("Insider holding", fmt.pct(f.insiders_pct, 1, false))}
         </div>
       </section>
 
@@ -359,6 +421,8 @@
         </div>
       </section>
 
+      ${sections.breakdown(r)}
+
       <section id="fundamentals" class="section grid grid-2">
         <div class="card">
           <h2>Revenue & profit</h2>
@@ -387,6 +451,8 @@
       </section>
       ${f.description ? `<section class="card section"><h2>About the company</h2><p style="color:var(--text-secondary);margin:6px 0 0">${esc(f.description)}</p>${f.website ? `<p><a href="${esc(f.website)}" target="_blank" rel="noopener">${esc(f.website)}</a></p>` : ""}</section>` : ""}
 
+      ${sections.financials(r)}
+
       <section id="valuation" class="card section">
         <h2>Fair value estimate</h2>
         <p class="sub">Growth assumption ${fmt.pct(val.growth_assumption_pct, 1, false)}${val.discount_rate_pct ? ` · discount rate ${fmt.pct(val.discount_rate_pct, 0, false)}` : ""}</p>
@@ -400,6 +466,7 @@
         ${f.analyst.analysts ? `<p class="sub" style="margin-top:10px">Analysts (${f.analyst.analysts}): target ${fmt.money(f.analyst.target_low, cur, 0)} – ${fmt.money(f.analyst.target_high, cur, 0)}, consensus “${esc(f.analyst.recommendation || "n/a")}”.</p>` : ""}
         <p class="disclaimer">${esc(val.note || "")}</p>
       </section>
+      ${sections.valuationExtra(r)}
 
       <section id="future" class="section grid grid-2">
         <div class="card">
@@ -502,6 +569,7 @@
     charts.drawdown($("#dd-chart"), risk.drawdown_chart);
     if (f.statements.length) charts.financials($("#fin-chart"), f.statements, cur);
     charts.fan($("#fan-chart"), proj, cur);
+    sections.bind(r);
 
     // planner
     const calc = () => {

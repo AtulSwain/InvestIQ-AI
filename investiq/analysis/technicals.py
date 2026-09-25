@@ -115,6 +115,11 @@ def analyze_technicals(hist: pd.DataFrame) -> dict:
         "s1": num(2 * pivot - last["High"], 2),
     }
 
+    prev_close = close.shift(1)
+    true_range = pd.concat([hist["High"] - hist["Low"], (hist["High"] - prev_close).abs(),
+                            (hist["Low"] - prev_close).abs()], axis=1).max(axis=1)
+    atr = true_range.ewm(alpha=1 / 14, adjust=False).mean().iloc[-1]
+
     avg_vol_20 = hist["Volume"].iloc[-20:].mean()
     avg_vol_90 = hist["Volume"].iloc[-90:].mean()
 
@@ -125,6 +130,10 @@ def analyze_technicals(hist: pd.DataFrame) -> dict:
         "signals": signals,
         "levels": levels,
         "rsi": num(rv, 1),
+        "atr": num(atr, 2),
+        "atr_pct": pct(atr / price),
+        "sma50": num(s50.iloc[-1], 2),
+        "sma200": num(s200.iloc[-1], 2),
         "volume_trend_pct": pct(avg_vol_20 / avg_vol_90 - 1) if avg_vol_90 else None,
         "series": {"sma50": s50, "sma200": s200},
     }

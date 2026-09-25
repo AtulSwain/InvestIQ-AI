@@ -7,11 +7,13 @@
 
   function money(v, cur, digits = 2) {
     if (v == null) return "—";
+    if (v < 0) return "−" + money(-v, cur, digits);
     return sym(cur) + Number(v).toLocaleString(locale(cur), { minimumFractionDigits: digits, maximumFractionDigits: digits });
   }
 
   function big(v, cur) {
     if (v == null) return "—";
+    if (v < 0) return "−" + big(-v, cur);
     const a = Math.abs(v);
     if (cur === "INR") {
       if (a >= 1e12) return sym(cur) + (v / 1e12).toLocaleString("en-IN", { maximumFractionDigits: 2 }) + " L Cr";

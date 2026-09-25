@@ -15,6 +15,13 @@ builds one report covering:
 | **Fair value** | Graham number, Graham growth formula, DCF, earnings multiple and analyst targets, blended into a fair-value range and an under/overvalued verdict |
 | **Future** | Bear/base/bull price ranges for 1, 3, 5 and 10 years, chance of loss, and an investment planner for a lump sum plus a monthly SIP |
 | **Technicals** | Trend, RSI, MACD, Bollinger bands, golden/death cross, support and resistance levels |
+| **Buy checklist** | 15 pass/fail checks across business quality, financial strength, valuation and price trend, with a verdict |
+| **Trade plan** | Entry zone, stop-loss, up to 3 targets, reward-to-risk ratio, ATR, and a position-size calculator based on how much you're willing to lose |
+| **More valuation** | Peter Lynch (PEG = 1), historical-P/E, and dividend-discount values; reverse DCF (the growth the price assumes); a DCF sensitivity grid; P/S, EV/EBITDA, EV/Sales, earnings and FCF yield; P/E at each year-end |
+| **Financial breakdown** | Several years of revenue, profit, margins, ROE, ROCE, debt, interest coverage, cash flow and cash conversion; Piotroski F-Score (9 tests); Altman Z-Score (bankruptcy risk) |
+| **Returns breakdown** | Month-by-month returns heatmap, seasonality by calendar month, holding-period returns (worst, typical and best for 1/3/5/10 years) |
+| **Dividends & ownership** | Dividend per year, yield, 5-year growth, payment streak; insider and institutional holding |
+| **Screener** (website) | Sort and filter every published stock by score, valuation, P/E, ROE, debt, dividend yield, sector and market |
 | **Compare** | 2–5 stocks side by side, plus a "growth of 100" chart |
 | **Watchlist** | Saved in your browser |
 

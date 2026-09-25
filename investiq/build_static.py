@@ -41,7 +41,9 @@ def report_filename(symbol: str) -> str:
 
 
 def _index_row(report: dict) -> dict:
-    one_year = next((t for t in report["performance"]["trailing"] if t["period"] == "1Y"), {})
+    trailing = {t["period"]: t for t in report["performance"]["trailing"]}
+    one_year = trailing.get("1Y", {})
+    five_year = trailing.get("5Y", {})
     return {
         "symbol": report["symbol"],
         "name": report["name"],
@@ -54,6 +56,18 @@ def _index_row(report: dict) -> dict:
         "score": report["scorecard"]["overall"],
         "rating": report["scorecard"]["rating"],
         "as_of": report["as_of"],
+        "sector": report["fundamentals"].get("sector"),
+        "market_cap": report["fundamentals"].get("market_cap"),
+        "pe": report["fundamentals"].get("pe"),
+        "pb": report["fundamentals"].get("pb"),
+        "roe_pct": report["fundamentals"].get("roe_pct"),
+        "debt_to_equity": report["fundamentals"].get("debt_to_equity"),
+        "dividend_yield_pct": report["fundamentals"].get("dividend_yield_pct"),
+        "cagr_5y_pct": five_year.get("cagr_pct"),
+        "margin_of_safety_pct": report["valuation"].get("margin_of_safety_pct"),
+        "checklist_passed": report["checklist"]["passed"],
+        "checklist_total": report["checklist"]["evaluated"],
+        "piotroski": (report["financials"].get("piotroski") or {}).get("score"),
     }
 
 

@@ -162,3 +162,105 @@ def analyze_performance(close: pd.Series, benchmark: pd.Series | None = None) ->
         "history_start": date_str(close.index[0]),
         "history_years": num((close.index[-1] - close.index[0]).days / 365.25, 1),
     }
+
+
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def monthly_returns(close: pd.Series, years: int = 12) -> list[dict]:
+    """Year x month grid of returns (most recent year first)."""
+    month_end = close.resample("ME").last()
+    rets = month_end.pct_change()
+    # First month measures from the first available close.
+    rets.iloc[0] = month_end.iloc[0] / close.iloc[0] - 1
+    first_year = close.index[-1].year - years + 1
+    rows = []
+    for year in sorted({d.year for d in rets.index if d.year >= first_year}, reverse=True):
+        months = [None] * 12
+        for d, v in rets[rets.index.year == year].items():
+            months[d.month - 1] = pct(v, 1)
+        in_year = close[close.index.year == year]
+        prior = close[close.index.year < year]
+        start = prior.iloc[-1] if len(prior) else in_year.iloc[0]
+        rows.append({"year": int(year), "months": months, "total_pct": pct(in_year.iloc[-1] / start - 1, 1)})
+    return rows
+
+
+def seasonality(close: pd.Series) -> list[dict]:
+    """Average return and hit rate for each calendar month across all years."""
+    month_end = close.resample("ME").last()
+    rets = month_end.pct_change().dropna()
+    out = []
+    for m in range(1, 13):
+        r = rets[rets.index.month == m]
+        out.append({
+            "month": MONTHS[m - 1],
+            "avg_pct": pct(r.mean(), 2) if len(r) else None,
+            "median_pct": pct(r.median(), 2) if len(r) else None,
+            "positive_pct": pct((r > 0).mean(), 0) if len(r) else None,
+            "years": int(len(r)),
+        })
+    return out
+
+
+def rolling_returns(close: pd.Series) -> list[dict]:
+    """If you bought on any week and held N years: worst / typical / best annual return."""
+    weekly = close.resample("W-FRI").last().dropna()
+    rows = []
+    for years in (1, 3, 5, 10):
+        n = 52 * years
+        if len(weekly) <= n + 10:
+            continue
+        cagr_series = (weekly.shift(-n) / weekly) ** (1 / years) - 1
+        c = cagr_series.dropna()
+        rows.append({
+            "years": years,
+            "samples": int(len(c)),
+            "worst_pct": pct(c.min(), 1),
+            "p25_pct": pct(c.quantile(0.25), 1),
+            "median_pct": pct(c.median(), 1),
+            "p75_pct": pct(c.quantile(0.75), 1),
+            "best_pct": pct(c.max(), 1),
+            "positive_pct": pct((c > 0).mean(), 0),
+            "above_10_pct": pct((c > 0.10).mean(), 0),
+        })
+    return rows
+
+
+def dividend_history(dividends: pd.Series, close: pd.Series) -> dict:
+    """Dividends per calendar year, growth and streak."""
+    if dividends is None or dividends.empty:
+        return {"paid": False, "years": [], "ttm": 0.0}
+    last_year = close.index[-1].year
+    by_year = dividends.groupby(dividends.index.year).sum()
+    by_year = by_year[by_year.index >= last_year - 14]
+    ttm = dividends.loc[close.index[-1] - pd.DateOffset(years=1):].sum()
+    years_list = [{"year": int(y), "dividend": num(v, 2)} for y, v in by_year.items()]
+    growth_5y = None
+    full = by_year[by_year.index < last_year]  # current year may be incomplete
+    if len(full) >= 6 and full.iloc[-6] > 0:
+        growth_5y = (full.iloc[-1] / full.iloc[-6]) ** (1 / 5) - 1
+    streak = 0
+    for y in range(last_year - 1, last_year - 40, -1):
+        if y in by_year.index and by_year[y] > 0:
+            streak += 1
+        else:
+            break
+    return {
+        "paid": True,
+        "years": years_list,
+        "ttm": num(ttm, 2),
+        "yield_pct": pct(ttm / close.iloc[-1]),
+        "growth_5y_pct": pct(growth_5y, 1),
+        "growth_5y": growth_5y,
+        "streak_years": streak,
+    }
+
+
+def analyze_breakdown(close: pd.Series, dividends: pd.Series) -> dict:
+    return {
+        "monthly": monthly_returns(close),
+        "seasonality": seasonality(close),
+        "rolling": rolling_returns(close),
+        "dividends": dividend_history(dividends, close),
+    }

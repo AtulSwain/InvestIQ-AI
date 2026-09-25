@@ -220,15 +220,31 @@ class DemoProvider(DataProvider):
         debt = [e * rng.uniform(0.1, 0.9) for e in equity]
         cash = [d * rng.uniform(0.2, 0.8) for d in debt]
         fcf = [n * rng.uniform(0.6, 1.1) for n in ni]
+        gross = [r * rng.uniform(0.35, 0.55) for r in rev]
+        ebit = [n * rng.uniform(1.3, 1.6) for n in ni]
+        interest = [e * rng.uniform(0.05, 0.2) for e in ebit]
+        total_assets = [e + d + e * rng.uniform(0.3, 0.8) for e, d in zip(equity, debt)]
+        cur_assets = [t * rng.uniform(0.3, 0.45) for t in total_assets]
+        cur_liab = [t * rng.uniform(0.15, 0.3) for t in total_assets]
+        cfo = [n * rng.uniform(1.0, 1.4) for n in ni]
         data.income = pd.DataFrame(
-            {y: {"Total Revenue": r, "Net Income": n, "Diluted EPS": n / shares}
-             for y, r, n in zip(years, rev, ni)}
+            {y: {"Total Revenue": r, "Gross Profit": g, "Operating Income": b * 0.95, "EBIT": b,
+                 "EBITDA": b * 1.25, "Interest Expense": i, "Pretax Income": b - i,
+                 "Net Income": n, "Diluted EPS": n / shares}
+             for y, r, g, b, i, n in zip(years, rev, gross, ebit, interest, ni)}
         )
         data.balance = pd.DataFrame(
-            {y: {"Stockholders Equity": e, "Total Debt": d, "Cash And Cash Equivalents": c}
-             for y, e, d, c in zip(years, equity, debt, cash)}
+            {y: {"Total Assets": ta, "Current Assets": ca, "Current Liabilities": cl,
+                 "Total Liabilities Net Minority Interest": ta - e, "Stockholders Equity": e,
+                 "Total Debt": d, "Long Term Debt": d * 0.8, "Cash And Cash Equivalents": c,
+                 "Retained Earnings": e * 0.7, "Ordinary Shares Number": shares}
+             for y, ta, ca, cl, e, d, c in zip(years, total_assets, cur_assets, cur_liab, equity, debt, cash)}
         )
-        data.cashflow = pd.DataFrame({y: {"Free Cash Flow": f} for y, f in zip(years, fcf)})
+        data.cashflow = pd.DataFrame(
+            {y: {"Operating Cash Flow": o, "Capital Expenditure": f - o, "Free Cash Flow": f,
+                 "Cash Dividends Paid": -n * 0.25}
+             for y, o, f, n in zip(years, cfo, fcf, ni)}
+        )
         hist = data.history["Close"]
         data.info = {
             "longName": name,
@@ -263,6 +279,8 @@ class DemoProvider(DataProvider):
             "targetHighPrice": price * rng.uniform(1.3, 1.6),
             "targetLowPrice": price * rng.uniform(0.7, 0.9),
             "numberOfAnalystOpinions": int(rng.integers(5, 40)),
+            "heldPercentInsiders": rng.uniform(0.05, 0.6),
+            "heldPercentInstitutions": rng.uniform(0.1, 0.5),
             "recommendationKey": "buy",
         }
 

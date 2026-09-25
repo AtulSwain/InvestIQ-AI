@@ -6,8 +6,10 @@ import pandas as pd
 
 from ..data.provider import DataProvider, DataUnavailableError
 from ..data.symbols import benchmark_for, currency_for, market_for, resolve_candidates
+from .decision import buy_checklist, trade_plan
+from .financials import analyze_financials
 from .fundamentals import analyze_fundamentals
-from .performance import analyze_performance
+from .performance import analyze_breakdown, analyze_performance
 from .projection import analyze_projection
 from .risk import analyze_risk
 from .scorecard import build_scorecard, build_summary
@@ -70,9 +72,15 @@ def build_report(provider: DataProvider, query: str) -> dict:
     series = tech.pop("series")
     fund = analyze_fundamentals(data, price)
     cagr5 = next((r["cagr_pct"] for r in perf["trailing"] if r["period"] == "5Y"), None)
-    val = analyze_valuation(fund, price, market, cagr5)
+    fin = analyze_financials(data, fund["market_cap"])
+    breakdown = analyze_breakdown(close, data.dividends)
+    divs = breakdown["dividends"]
+    val = analyze_valuation(fund, price, market, cagr5, fin["years"], close,
+                            annual_dividend=divs.get("ttm"), dividend_growth=divs.pop("growth_5y", None))
     proj = analyze_projection(close, market)
     score = build_scorecard(perf, risk, tech, fund, val)
+    checklist = buy_checklist(fund, fin, val, tech, perf["trailing"], risk)
+    plan = trade_plan(price, tech, val, fund, proj)
     summary = build_summary(fund["name"], currency, price, perf, risk, tech, val, proj, score)
 
     return {
@@ -99,6 +107,10 @@ def build_report(provider: DataProvider, query: str) -> dict:
         "technicals": tech,
         "valuation": val,
         "projection": proj,
+        "financials": fin,
+        "breakdown": breakdown,
+        "checklist": checklist,
+        "trade_plan": plan,
         "chart": _price_chart(hist, series["sma50"], series["sma200"]),
         "benchmark_chart": _benchmark_chart(bench),
         "disclaimer": DISCLAIMER,

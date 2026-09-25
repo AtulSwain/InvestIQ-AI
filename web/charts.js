@@ -207,6 +207,34 @@
     });
   }
 
+  /* Few-point category line chart (e.g. margins by fiscal year). */
+  function lines(canvas, labels, series, yFmt) {
+    const o = baseOptions();
+    o.scales.y.ticks.callback = yFmt;
+    o.plugins.tooltip.callbacks = { label: (ctx) => ` ${ctx.dataset.label}: ${yFmt(ctx.parsed.y)}` };
+    return mount(canvas, {
+      type: "line",
+      data: { labels, datasets: series.map((sr) => line(sr.label, sr.data, css(sr.color), { pointRadius: 4, pointBorderColor: css("--surface-1"), pointBorderWidth: 2 })) },
+      options: o,
+      plugins: [crosshair],
+    });
+  }
+
+  /* Single-series bar chart; signed=true colours bars by sign (diverging blue/red). */
+  function bars(canvas, labels, data, label, yFmt, signed) {
+    const o = baseOptions();
+    o.scales.y.ticks.callback = yFmt;
+    o.plugins.tooltip.callbacks = { label: (ctx) => ` ${label}: ${yFmt(ctx.parsed.y)}` };
+    o.datasets = { bar: { borderRadius: 4, borderSkipped: false, categoryPercentage: 0.8, barPercentage: 0.9 } };
+    const pos = css(signed ? "--pos" : "--series-1");
+    const neg = css("--neg");
+    return mount(canvas, {
+      type: "bar",
+      data: { labels, datasets: [{ label, data, backgroundColor: data.map((v) => (signed && v < 0 ? neg : pos)) }] },
+      options: o,
+    });
+  }
+
   const SERIES = ["--series-1", "--series-2", "--series-3", "--series-4", "--series-5"];
 
   function compare(canvas, stocks, startDate) {
@@ -227,5 +255,5 @@
     registry.clear();
   }
 
-  window.charts = { price, yearBars, drawdown, fan, financials, compare, destroyAll, css, indexName, SERIES };
+  window.charts = { price, yearBars, drawdown, fan, financials, compare, lines, bars, destroyAll, css, indexName, SERIES };
 })();

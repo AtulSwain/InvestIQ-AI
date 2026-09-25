@@ -106,6 +106,8 @@ def analyze_fundamentals(data: StockData, price: float) -> dict:
         "operating_margin_pct": pct(info.get("operatingMargins")),
         "debt_to_equity": num(d_e, 2),
         "current_ratio": num(info.get("currentRatio"), 2),
+        "insiders_pct": pct(info.get("heldPercentInsiders"), 1),
+        "institutions_pct": pct(info.get("heldPercentInstitutions"), 1),
         "total_debt": num(debt.iloc[-1]) if len(debt) else num(info.get("totalDebt")),
         "total_cash": num(cash.iloc[-1]) if len(cash) else num(info.get("totalCash")),
         "free_cash_flow": num(fcf.iloc[-1]) if len(fcf) else num(info.get("freeCashflow")),

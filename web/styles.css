@@ -278,3 +278,48 @@ tr:last-child td { border-bottom: none; }
   .chart-box { height: 260px; }
   .chart-box.tall { height: 300px; }
 }
+
+/* ---------- checklist & trade plan ---------- */
+.check-head { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); margin: 6px 0 4px; border-left: 4px solid var(--text-muted); }
+.check-head.tone-good { border-left-color: var(--good); }
+.check-head.tone-mixed { border-left-color: var(--warning); }
+.check-head.tone-bad { border-left-color: var(--critical); }
+.check-score { font-size: 30px; font-weight: 700; line-height: 1; }
+.check-score .muted { font-size: 16px; }
+.checklist { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.checklist li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
+.checklist .icon { font-weight: 700; width: 18px; flex: none; text-align: center; }
+.checklist.compact { gap: 6px; margin-top: 10px; }
+.callout { background: var(--surface-2); border-left: 4px solid var(--warning); padding: 10px 12px; border-radius: 8px; font-size: 14px; color: var(--text-secondary); }
+.ps-out { margin: 12px 0 0; font-size: 14px; color: var(--text-secondary); }
+.ps-out strong { color: var(--text-primary); }
+
+/* ---------- valuation extras ---------- */
+.big-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
+.big-compare > div { background: var(--surface-2); border-radius: 10px; padding: 12px; }
+.big-compare .label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.big-compare .value { font-size: 26px; font-weight: 700; }
+.big-compare .value .muted { font-size: 14px; font-weight: 400; }
+table.sens td.base { outline: 2px solid var(--series-1); outline-offset: -2px; font-weight: 700; }
+
+/* ---------- financial breakdown ---------- */
+table.fin tr.group td { font-weight: 700; color: var(--text-secondary); background: var(--surface-2); text-transform: uppercase; font-size: 12px; letter-spacing: 0.03em; }
+table.heatmap td, table.heatmap th { text-align: center; padding: 6px 4px; font-size: 13px; }
+table.heatmap td:first-child, table.heatmap th:first-child { text-align: left; }
+table.heatmap td { border-bottom: 2px solid var(--surface-1); }
+.zbar { position: relative; height: 12px; margin: 14px 0 4px; border-radius: 6px; overflow: hidden; background: var(--surface-2); }
+.zbar .zone { position: absolute; top: 0; bottom: 0; }
+.zbar .distress { left: 0; background: color-mix(in srgb, var(--critical) 55%, transparent); }
+.zbar .grey { background: color-mix(in srgb, var(--warning) 55%, transparent); }
+.zbar .safe { background: color-mix(in srgb, var(--good) 55%, transparent); }
+.zbar .marker { position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--text-primary); border-radius: 2px; }
+.zbar-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+
+/* ---------- screener ---------- */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.filters input, .filters select { font: inherit; font-size: 14px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text-primary); }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--text-primary); }
+th.sorted { color: var(--text-primary); }
+table.compact th, table.compact td { padding: 6px 5px; font-size: 13px; }
+table.compact th { font-size: 11px; }

@@ -322,10 +322,11 @@
     const priceBadge = q.realtime
       ? `<span class="badge live">● Real-time · ${esc(qs.provider_label || "")}</span>`
       : `<span class="badge">Delayed · ${q.source === "live_quote" ? esc(qs.provider_label || "") : "last close"}</span>`;
+    const qb = brands.forProvider(qs.provider);
     const origin = r._origin === "snapshot" ? '<span class="badge">Daily snapshot</span>'
       : r._origin === "live" ? '<span class="badge live">Live report</span>' : "";
     const updated = r.generated_at || r.as_of;
-    return `${priceBadge}${origin}<span class="muted">Price as of ${fmtTime(q.timestamp || r.as_of)} · Data last updated ${fmtTime(updated)}</span>`;
+    return `${qb ? `<span class="with-logo" title="Price source: ${esc(qs.provider_label || "")}">${brands.logo(qb, { size: 14 })}</span>` : ""}${priceBadge}${origin}<span class="muted">Price as of ${fmtTime(q.timestamp || r.as_of)} · Data last updated ${fmtTime(updated)}</span>`;
   }
 
   /* One-line attribution under a section heading. */
@@ -338,8 +339,9 @@
     const method = used.find((s) => s.provider === "investiq");
     // One entry per provider (price + index history usually share one), newest as-of date first.
     const seen = new Set();
+    const mark = (s) => { const b = brands.forProvider(s.provider); return b ? brands.logo(b, { size: 12 }) + " " : ""; };
     const parts = data.filter((s) => !seen.has(s.provider) && seen.add(s.provider))
-      .map((s) => `${esc(s.provider_label)}${s.as_of ? ` · as of ${fmtTime(s.as_of)}` : ""}`);
+      .map((s) => `${mark(s)}${esc(s.provider_label)}${s.as_of ? ` · as of ${fmtTime(s.as_of)}` : ""}`);
     const statusTag = method && method.status !== "actual" ? ` <span class="badge">${STATUS[method.status]}</span>` : "";
     return `<p class="src-line">Source: ${parts.join(" + ") || "InvestIQ"}${statusTag} <a href="#" data-jump="sources">details</a></p>`;
   }
@@ -370,7 +372,7 @@
         <thead><tr><th>Data</th><th class="l">Source</th><th>As of</th><th>Fetched</th><th class="l">Period</th><th>Currency</th><th>Type</th></tr></thead>
         <tbody>${data.map((s) => `<tr>
           <td>${esc(name(s.dataset))}${s.methodology ? `<div class="muted method-note">${esc(s.methodology)}</div>` : ""}</td>
-          <td class="l">${s.provider_url ? `<a href="${esc(s.provider_url)}" target="_blank" rel="noopener">${esc(s.provider_label)}</a>` : esc(s.provider_label)}${s.realtime ? ' <span class="badge live">real-time</span>' : s.delayed ? `<div class="muted">${esc(s.delayed)}</div>` : ""}</td>
+          <td class="l">${brands.forProvider(s.provider) ? brands.logo(brands.forProvider(s.provider), { size: 14 }) + " " : ""}${s.provider_url ? `<a href="${esc(s.provider_url)}" target="_blank" rel="noopener">${esc(s.provider_label)}</a>` : esc(s.provider_label)}${s.realtime ? ' <span class="badge live">real-time</span>' : s.delayed ? `<div class="muted">${esc(s.delayed)}</div>` : ""}</td>
           <td>${fmtTime(s.as_of)}</td><td>${fmtTime(s.fetched_at)}</td>
           <td class="l">${esc(s.period || "—")}</td><td>${esc(s.currency || "—")}</td>
           <td><span class="badge">${STATUS[s.status] || esc(s.status)}</span></td></tr>`).join("")}</tbody>

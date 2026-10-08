@@ -18,7 +18,10 @@ whether it is reported, an estimate or calculated (hover any value).
 | **Watchlists & portfolio** | Multiple watchlists; portfolio P&L in INR or USD, allocation by holding / sector / country, beta, volatility, drawdown, correlation, weighted P/E, concentration warnings |
 | **Alerts** | Price, daily move, any metric, news category, earnings date, insider selling, downgrades, new filings; toast + browser notification |
 | **Research workspace** | A notebook per idea (thesis, bull/bear, risks, catalysts, questions, notes, saved AI answers, sources) and a thesis tracker that checks measurable assumptions and new developments and flags conflicts |
+| **Data sources** | Every exchange (NSE, BSE, Nasdaq, NYSE), data provider (Yahoo Finance, Alpaca, Finnhub, Twelve Data, FMP, Alpha Vantage), regulator (SEC, SEBI, RBI, MoSPI) and AI service, with its logo, what InvestIQ uses it for and (on a live server) whether it is configured. The same logos mark prices, section sources, news publishers, filings and AI citations across the app |
 | **Reports** | One-click research report (with your thesis if you have one), print to PDF or download Markdown |
+
+Logos are each organisation's own site icon, loaded in the browser through Google's public favicon service; if one can't load, a lettered badge in the brand colour is shown. Names and logos are trademarks of their owners, used only to identify data sources.
 
 Keyboard: `Ctrl K` or `/` opens the command palette, `g` then a letter jumps to a page (`?` lists them), `t` toggles light/dark.
 Watchlists, portfolio, notebooks and alerts are stored in your browser; export/import them from the command palette.

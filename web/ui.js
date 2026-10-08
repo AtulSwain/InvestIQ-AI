@@ -158,8 +158,9 @@ window.views = window.views || {}; // page modules in web/views/ register here
     const TOKEN = (n) => `\u0001${n}\u0002`;
     const md = (res.blocks || []).map((b) => b.text + (b.cites || []).map(TOKEN).join("")).join("");
     const body = markdown(md).replace(/\u0001(\d+)\u0002/g, (_, n) => `<a class="cite" href="#${idPrefix}-src-${n}" title="Source ${n}">${n}</a>`);
+    const srcLogo = (s) => (s.url ? brands.forUrl(s.url, { size: 14, label: s.title }) : brands.forLabel(s.provider) ? brands.logo(brands.forLabel(s.provider), { size: 14 }) : "");
     const srcs = (res.sources || []).map((s) => `<li id="${idPrefix}-src-${s.n}"><span class="n">[${s.n}]</span><span>
-        ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)}
+        ${srcLogo(s)} ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)}
         <span class="muted"> · ${esc(s.provider || "")}${s.as_of ? " · " + esc(String(s.as_of).slice(0, 10)) : ""}</span>
         ${(s.quotes || []).slice(0, 1).map((q) => `<q>${esc(q)}</q>`).join("")}</span></li>`).join("");
     return `<div class="ai-answer">${body}</div>
@@ -188,7 +189,7 @@ window.views = window.views || {}; // page modules in web/views/ register here
     return `<div class="news-item">
       ${n.url ? `<a class="title" href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.title)}</a>` : `<span class="title">${esc(n.title)}</span>`}
       <div class="meta">${showSymbol && n.symbol ? stockLink(n.symbol) + " ·" : ""}<span class="badge">${esc(CAT_LABEL[n.category] || n.category || "News")}</span>
-        <span>${esc(n.publisher || "")}</span><span>${relTime(n.published_at)}</span>${move}</div>
+        <span class="with-logo">${n.url ? brands.forUrl(n.url, { size: 12, label: n.publisher }) : brands.forProvider(n.provider) ? brands.logo(brands.forProvider(n.provider), { size: 12 }) : ""}${esc(n.publisher || "")}</span><span>${relTime(n.published_at)}</span>${move}</div>
       ${n.summary && n.summary !== n.title ? `<p class="summary">${esc(n.summary.slice(0, 220))}${n.summary.length > 220 ? "…" : ""}</p>` : ""}
     </div>`;
   }
@@ -202,14 +203,15 @@ window.views = window.views || {}; // page modules in web/views/ register here
   function srcNote(src, extra = "") {
     if (!src) return "";
     const when = src.fetched_at ? `updated ${relTime(src.fetched_at)}` : "";
-    return `<p class="prov">${esc([src.provider_label || src.provider, src.delayed, when, extra].filter(Boolean).join(" · "))}</p>`;
+    const b = brands.forProvider(src.provider);
+    return `<p class="prov with-logo">${b ? brands.logo(b, { size: 12 }) : ""}${esc([src.provider_label || src.provider, src.delayed, when, extra].filter(Boolean).join(" · "))}</p>`;
   }
 
   /* Ticker tile for an instrument row from the market overview. */
   function tick(t) {
     const digits = Math.abs(t.last) >= 1000 ? 0 : 2;
     return `<div class="tick" title="${esc(t.name)} · as of ${esc(t.as_of || "")}">
-      <div class="name"><span>${esc(t.name)}</span><span>${esc(t.region || "")}</span></div>
+      <div class="name"><span class="with-logo">${(() => { const b = brands.forExchange(null, t.symbol); return b ? brands.logo(b, { size: 12 }) : ""; })()}${esc(t.name)}</span><span>${esc(t.region || "")}</span></div>
       <div class="last">${t.last == null ? "—" : fmt.n(t.last, digits)}</div>
       <div class="chg">${chg(t.change_pct)}</div>${sparkline(t.spark, { height: 26 })}</div>`;
   }

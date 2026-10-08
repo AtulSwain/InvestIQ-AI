@@ -67,7 +67,7 @@
         </div>
         <div class="card"><h2>India economy</h2><p class="muted" style="font-size:12.5px">${esc(m.india_macro?.note || "")}</p>
           <p style="font-size:12.5px">Market-implied signals above: <strong>USD/INR</strong> (rupee strength), <strong>India VIX</strong> (expected NIFTY volatility), <strong>Brent</strong> (India imports most of its oil).</p>
-          <div class="chips"><a class="chip" href="https://www.rbi.org.in/" target="_blank" rel="noopener">RBI ${ui.icon("external")}</a><a class="chip" href="https://www.mospi.gov.in/" target="_blank" rel="noopener">MoSPI ${ui.icon("external")}</a></div></div>
+          <div class="chips">${brands.chip("rbi")}${brands.chip("mospi")}${brands.chip("sebi")}</div></div>
       </div>
       <div class="card section"><h2>How macro moves sectors</h2>
         <div class="table-wrap"><table class="compact"><thead><tr><th class="l">If…</th><th class="l">Tends to help</th><th class="l">Tends to hurt</th><th class="l">Why</th></tr></thead><tbody>

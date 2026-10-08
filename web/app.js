@@ -31,6 +31,7 @@
       ["workspace", "Research Workspace", "#/workspace", "workspace", "g e"],
       ["reports", "Reports", "#/reports", "reports", "g o"],
       ["learn", "Learn & glossary", "#/learn", "learn", "g h"],
+      ["sources", "Data sources", "#/sources", "database", "g u"],
     ] },
   ];
   const FLAT = NAV.flatMap((g) => g.items);
@@ -39,6 +40,10 @@
     ${g.items.map(([id, label, href, ico]) => `<a class="nav-link" href="${href}" data-nav="${id}">${ui.icon(ico)}<span>${label}</span></a>`).join("")}</div>`).join("");
   $("#menu-btn").innerHTML = ui.icon("menu");
   $(".ico-search").outerHTML = ui.icon("search");
+
+  /* Footer: every source InvestIQ draws on, with its logo. */
+  $("#footer-sources").innerHTML = ["nse", "bse", "nasdaq", "nyse", "yahoo", "alpaca", "finnhub", "twelvedata", "fmp", "alphavantage", "sec", "anthropic"]
+    .map((id) => brands.chip(id, { size: 14 })).join("");
 
   /* ---------------- theme ---------------- */
   const paintThemeBtn = () => { $("#theme-toggle").innerHTML = ui.icon(document.documentElement.dataset.theme === "light" ? "moon" : "sun"); };
@@ -174,7 +179,7 @@
       let stocks = [];
       if (q) {
         try { stocks = await data.search(q); } catch { stocks = []; }
-        stocks = stocks.slice(0, 8).map((s) => ({ group: "Stocks", html: `<span class="ticker">${esc(s.symbol)}</span> <span class="muted">${esc(s.name)}</span>`, kind: s.exchange, run: () => ui.go(`#/research/${encodeURIComponent(s.symbol)}`) }));
+        stocks = stocks.slice(0, 8).map((s) => ({ group: "Stocks", html: `${(() => { const b = brands.forExchange(s.exchange, s.symbol); return b ? brands.logo(b, { size: 14 }) + " " : ""; })()}<span class="ticker">${esc(s.symbol)}</span> <span class="muted">${esc(s.name)}</span>`, kind: s.exchange, run: () => ui.go(`#/research/${encodeURIComponent(s.symbol)}`) }));
         // Always offer a direct lookup for whatever was typed.
         stocks.push({ group: "Stocks", html: `Research “${esc(input.value.trim())}”`, kind: "lookup", run: () => ui.go(`#/research/${encodeURIComponent(input.value.trim())}`) });
       } else {

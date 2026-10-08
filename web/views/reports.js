@@ -83,7 +83,7 @@
 
       <h2>Appendix: sources & methodology</h2>
       <table class="compact"><thead><tr><th class="l">Data</th><th class="l">Provider</th><th>As of</th><th>Fetched</th><th>Type</th></tr></thead><tbody>
-        ${[...(r.sources || []), ...(ext.sources || [])].filter((s) => s.provider !== "investiq").map((s) => `<tr><td class="l">${esc(s.dataset)}</td><td class="l">${esc(s.provider_label)}</td><td>${esc(s.as_of || "—")}</td><td>${esc((s.fetched_at || "").slice(0, 16).replace("T", " "))}</td><td>${esc(s.status)}</td></tr>`).join("")}
+        ${[...(r.sources || []), ...(ext.sources || [])].filter((s) => s.provider !== "investiq").map((s) => `<tr><td class="l">${esc(s.dataset)}</td><td class="l">${brands.forProvider(s.provider) ? brands.logo(brands.forProvider(s.provider), { size: 12 }) + " " : ""}${esc(s.provider_label)}</td><td>${esc(s.as_of || "—")}</td><td>${esc((s.fetched_at || "").slice(0, 16).replace("T", " "))}</td><td>${esc(s.status)}</td></tr>`).join("")}
       </tbody></table>
       <ul class="method-list" style="font-size:11.5px">${(r.sources || []).filter((s) => s.provider === "investiq").map((s) => `<li><strong>${esc(s.dataset.replace(/^method_/, "").replace(/_/g, " "))}</strong>: ${esc(s.methodology || "")}</li>`).join("")}</ul>
       <p class="disclaimer">${esc(r.disclaimer)}</p>

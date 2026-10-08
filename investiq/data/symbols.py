@@ -26,7 +26,7 @@ POPULAR_INDIA = {
     "ULTRACEMCO": "UltraTech Cement",
     "WIPRO": "Wipro",
     "NESTLEIND": "Nestle India",
-    "TATAMOTORS": "Tata Motors",
+    "TMPV": "Tata Motors Passenger Vehicles",
     "TATASTEEL": "Tata Steel",
     "POWERGRID": "Power Grid Corporation of India",
     "NTPC": "NTPC",
@@ -114,6 +114,10 @@ def search_local(query: str, limit: int = 10) -> list[dict]:
     return [r[1] for r in results[:limit]]
 
 
+# Listings whose ticker changed (old -> new). Tata Motors demerged in 2025; the old ticker has no prices.
+RENAMED = {"TATAMOTORS": "TMPV", "TATAMOTORS.NS": "TMPV.NS", "TATAMOTORS.BO": "TMPV.BO"}
+
+
 def resolve_candidates(raw: str) -> list[str]:
     """Ordered list of Yahoo tickers to try for a user-typed symbol or name.
 
@@ -122,6 +126,7 @@ def resolve_candidates(raw: str) -> list[str]:
     s = raw.strip().upper().replace(" ", "")
     if not s:
         return []
+    s = RENAMED.get(s, s)
     if "." in s or s.startswith("^") or "=" in s:
         return [s]
     if s in POPULAR_INDIA:
@@ -149,7 +154,7 @@ SECTORS = {
     "BHARTIARTL": "Communication Services",
     "ITC": "Consumer Staples", "HINDUNILVR": "Consumer Staples", "NESTLEIND": "Consumer Staples",
     "BRITANNIA": "Consumer Staples", "DMART": "Consumer Staples",
-    "MARUTI": "Consumer Discretionary", "TATAMOTORS": "Consumer Discretionary", "M&M": "Consumer Discretionary",
+    "MARUTI": "Consumer Discretionary", "TMPV": "Consumer Discretionary", "M&M": "Consumer Discretionary",
     "EICHERMOT": "Consumer Discretionary", "HEROMOTOCO": "Consumer Discretionary", "TITAN": "Consumer Discretionary",
     "ASIANPAINT": "Materials", "ETERNAL": "Consumer Discretionary", "IRCTC": "Consumer Discretionary",
     "SUNPHARMA": "Health Care", "DRREDDY": "Health Care", "CIPLA": "Health Care", "DIVISLAB": "Health Care",

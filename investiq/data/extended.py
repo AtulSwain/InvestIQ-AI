@@ -30,11 +30,11 @@ def _num(v):
     return None if math.isnan(f) or math.isinf(f) else f
 
 
-def _date(v):
+def _date(v, unit=None):
     if v is None:
         return None
     try:
-        ts = pd.Timestamp(v)
+        ts = pd.Timestamp(v, unit=unit) if unit and isinstance(v, (int, float)) else pd.Timestamp(v)
     except (ValueError, TypeError):
         return None
     if pd.isna(ts):
@@ -221,7 +221,7 @@ def parse_estimates(df) -> list[dict]:
 def parse_sec_filings(items, limit=25) -> list[dict]:
     out = []
     for f in (items or [])[:limit]:
-        out.append({"date": f.get("date") or _date(f.get("epochDate")), "type": f.get("type"),
+        out.append({"date": _date(f.get("date")) or _date(f.get("epochDate"), unit="s"), "type": f.get("type"),
                     "title": f.get("title"), "url": f.get("edgarUrl"),
                     "exhibits": [{"name": k, "url": v} for k, v in (f.get("exhibits") or {}).items()][:5]})
     return out

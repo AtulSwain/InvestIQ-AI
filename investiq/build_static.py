@@ -24,7 +24,9 @@ import re
 import shutil
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+
+import pandas as pd
 from pathlib import Path
 
 from .analysis.market import macro_dashboard, market_overview, movers_and_sectors, upcoming_earnings
@@ -51,7 +53,24 @@ def _index_row(report: dict) -> dict:
 
 
 def json_safe(obj):
-    """Replace NaN/inf (which real provider data sometimes contains) with None so strict JSON never fails."""
+    """Make provider data strictly JSON-safe: NaN/inf -> None, dates -> ISO strings, numpy scalars -> Python.
+    Real Yahoo data contains all of these; the demo data never does."""
+    if isinstance(obj, bool) or obj is None or isinstance(obj, (str, int)) and not hasattr(obj, "item"):
+        return obj
+    if not isinstance(obj, (dict, list, tuple, set, str)):
+        try:
+            if pd.isna(obj) is True:  # NaN, NaT, pd.NA
+                return None
+        except (TypeError, ValueError):
+            pass
+    if isinstance(obj, (date, datetime)):  # includes pandas Timestamp
+        return obj.isoformat()[:10] if not isinstance(obj, datetime) or (obj.hour, obj.minute, obj.second) == (0, 0, 0) else obj.isoformat()
+    if hasattr(obj, "item") and not isinstance(obj, (dict, list, tuple)):  # numpy scalar
+        try:
+            obj = obj.item()
+        except (TypeError, ValueError):
+            return str(obj)
+        return json_safe(obj)
     if isinstance(obj, float):
         return obj if math.isfinite(obj) else None
     if isinstance(obj, dict):
@@ -62,7 +81,7 @@ def json_safe(obj):
 
 
 def _dump(obj) -> str:
-    return json.dumps(json_safe(obj), separators=(",", ":"), allow_nan=False)
+    return json.dumps(json_safe(obj), separators=(",", ":"), allow_nan=False, default=str)
 
 
 def _gh(level: str, message: str) -> None:

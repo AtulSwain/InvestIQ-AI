@@ -40,6 +40,7 @@ def summary_row(report: dict) -> dict:
         "checklist_total": report["checklist"]["evaluated"], "risk_level": report["risk_profile"]["level"],
         "as_of": report["as_of"],
         **{k: m[k]["value"] for k in SUMMARY_KEYS},
+        "signals": {k: m[k]["signal"] for k in SUMMARY_KEYS if m[k].get("signal")},
     }
 
 

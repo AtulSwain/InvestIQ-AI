@@ -250,10 +250,68 @@
     return mount(canvas, { type: "line", data: { datasets }, options: o, plugins: [crosshair] });
   }
 
+
+  /* Candlesticks without a plugin: floating bars for the wick (low-high) and body (open-close).
+     Category x-axis (trading days only, no weekend gaps). onIndex(i) fires on hover for the OHLC row. */
+  function candles(canvas, ohlc, from, currency, onIndex) {
+    const n = ohlc.dates.length;
+    const i0 = Math.max(0, from);
+    const idx = Array.from({ length: n - i0 }, (_, k) => i0 + k);
+    const up = css("--up-text"), down = css("--down-text");
+    const color = idx.map((i) => (ohlc.close[i] >= ohlc.open[i] ? up : down));
+    const o = baseOptions();
+    o.scales.x.ticks.maxTicksLimit = 8;
+    o.scales.x.ticks.callback = function (v) { return fmt.date(this.getLabelForValue(v)); };
+    o.scales.y.beginAtZero = false;
+    o.scales.y.ticks.callback = (v) => fmt.money(v, currency, v >= 1000 ? 0 : 2);
+    o.datasets = { bar: { grouped: false } };
+    o.plugins.tooltip.callbacks = {
+      title: (items) => fmt.date(items[0].label),
+      label: (ctx) => {
+        if (ctx.datasetIndex !== 1) return null;
+        const i = idx[ctx.dataIndex];
+        return [` O ${fmt.money(ohlc.open[i], currency)}  H ${fmt.money(ohlc.high[i], currency)}`, ` L ${fmt.money(ohlc.low[i], currency)}  C ${fmt.money(ohlc.close[i], currency)}`];
+      },
+    };
+    o.plugins.tooltip.filter = (item) => item.datasetIndex === 1;
+    if (onIndex) o.onHover = (evt, els) => { if (els.length) onIndex(idx[els[0].index]); };
+    return mount(canvas, {
+      type: "bar",
+      data: {
+        labels: idx.map((i) => ohlc.dates[i]),
+        datasets: [
+          { label: "Range", data: idx.map((i) => [ohlc.low[i], ohlc.high[i]]), backgroundColor: color, barThickness: 1, borderSkipped: false },
+          { label: "OHLC", data: idx.map((i) => [Math.min(ohlc.open[i], ohlc.close[i]), Math.max(ohlc.open[i], ohlc.close[i]) || ohlc.close[i]]),
+            backgroundColor: color, categoryPercentage: 0.85, barPercentage: 0.8, minBarLength: 1, borderSkipped: false },
+        ],
+      },
+      options: o,
+      plugins: [crosshair],
+    });
+  }
+
+  /* Volume bars aligned to a list of dates; colour by up/down day when closes are given. */
+  function volume(canvas, dates, vols, closes, category) {
+    const o = baseOptions();
+    o.scales.y.ticks.callback = (v) => fmt.big(v, "");
+    o.scales.y.ticks.maxTicksLimit = 3;
+    o.scales.x.display = false;
+    if (!category) o.scales.x = { ...timeScale(), display: false };
+    o.plugins.tooltip.callbacks = { title: (items) => fmt.date(category ? items[0].label : dates[items[0].dataIndex]), label: (ctx) => ` Volume: ${fmt.n(ctx.parsed.y, 0)}` };
+    const up = css("--up-text") + "88", down = css("--down-text") + "88";
+    const col = vols.map((_, i) => (closes && i > 0 && closes[i] < closes[i - 1] ? down : up));
+    return mount(canvas, {
+      type: "bar",
+      data: category ? { labels: dates, datasets: [{ data: vols, backgroundColor: col, categoryPercentage: 0.9, barPercentage: 0.9 }] }
+        : { datasets: [{ data: vols.map((v, i) => ({ x: dates[i], y: v })), backgroundColor: col }] },
+      options: o,
+    });
+  }
+
   function destroyAll() {
     registry.forEach((c) => c.destroy());
     registry.clear();
   }
 
-  window.charts = { price, yearBars, drawdown, fan, financials, compare, lines, bars, destroyAll, css, indexName, SERIES };
+  window.charts = { candles, volume, price, yearBars, drawdown, fan, financials, compare, lines, bars, destroyAll, css, indexName, SERIES };
 })();

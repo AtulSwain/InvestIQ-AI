@@ -57,6 +57,40 @@ DEFS = {
 }
 
 
+# Signal thresholds: (good_if, ok_if) as (op, value). Same spirit as scorecard.py / decision.py:
+# >= good -> "good", >= ok -> "ok", else "weak" (reversed for "lower is better" metrics).
+SIGNALS = {
+    "pe": ("<=", 20, "<=", 35), "forward_pe": ("<=", 18, "<=", 30), "pb": ("<=", 3, "<=", 6),
+    "ev_ebitda": ("<=", 12, "<=", 20), "ps": ("<=", 3, "<=", 8), "peg": ("<=", 1, "<=", 2),
+    "fcf_yield_pct": (">=", 5, ">=", 2), "earnings_yield_pct": (">=", 6, ">=", 3),
+    "roe_pct": (">=", 15, ">=", 8), "roce_pct": (">=", 15, ">=", 8), "roic_pct": (">=", 12, ">=", 6),
+    "net_margin_pct": (">=", 12, ">=", 5), "operating_margin_pct": (">=", 15, ">=", 8), "gross_margin_pct": (">=", 40, ">=", 20),
+    "revenue_cagr_pct": (">=", 10, ">=", 3), "profit_cagr_pct": (">=", 10, ">=", 3), "revenue_growth_pct": (">=", 10, ">=", 0),
+    "debt_to_equity": ("<=", 0.5, "<=", 1.5), "current_ratio": (">=", 1.5, ">=", 1.0), "interest_coverage": (">=", 6, ">=", 2.5),
+    "piotroski": (">=", 7, ">=", 4), "altman_z": (">=", 2.99, ">=", 1.81),
+    "return_1y_pct": (">=", 15, ">=", 0), "cagr_5y_pct": (">=", 12, ">=", 5), "cagr_10y_pct": (">=", 12, ">=", 5),
+    "volatility_pct": ("<=", 25, "<=", 40), "max_drawdown_pct": (">=", -35, ">=", -55), "beta": ("<=", 1.0, "<=", 1.4),
+    "margin_of_safety_pct": (">=", 10, ">=", -15), "score": (">=", 7.5, ">=", 4.5),
+    "dividend_yield_pct": (">=", 2, ">=", 0.5),
+}
+FINANCIAL_SECTOR_SKIP = {"debt_to_equity", "current_ratio", "interest_coverage", "altman_z", "fcf_yield_pct", "ev_ebitda"}
+
+
+def signal(key: str, value, financial_sector: bool = False):
+    """"good" / "ok" / "weak" / None for one metric value."""
+    rule = SIGNALS.get(key)
+    if rule is None or value is None or isinstance(value, bool) or (financial_sector and key in FINANCIAL_SECTOR_SKIP):
+        return None
+    if key in ("pe", "forward_pe", "ev_ebitda", "ps", "peg", "pb") and value <= 0:
+        return "weak"  # losses: a negative multiple is not "cheap"
+    gop, gv, oop, ov = rule
+    cmp = (lambda a, b: a >= b) if gop == ">=" else (lambda a, b: a <= b)
+    if cmp(value, gv):
+        return "good"
+    cmp = (lambda a, b: a >= b) if oop == ">=" else (lambda a, b: a <= b)
+    return "ok" if cmp(value, ov) else "weak"
+
+
 def roic(fin_years: list[dict], tax_rate: float = 0.25):
     """Approximate ROIC: EBIT x (1 - tax) / (debt + equity - cash), latest year."""
     if not fin_years:
@@ -112,5 +146,6 @@ def build_metrics(report: dict) -> dict:
         # Price fields follow whichever quote the report used (live quote or last close).
         src_id = report["quote"].get("source", "price_history") if key in ("price", "change_pct") else src
         out[key] = {"label": label, "value": value, "unit": unit, "period": period, "status": status,
-                    "source": src_id, "currency": report["currency"] if unit in ("money", "big") else None}
+                    "source": src_id, "currency": report["currency"] if unit in ("money", "big") else None,
+                    "signal": signal(key, value, bool(fin.get("is_financial_sector")))}
     return out

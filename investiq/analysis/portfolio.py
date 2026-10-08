@@ -38,11 +38,15 @@ def analyze_portfolio(provider: DataProvider, holdings: list[dict], base: str = 
     fx = {"INR": 1.0, "USD": 1.0}
     try:
         usdinr = float(provider.get_history("INR=X")["Close"].iloc[-1])
+        if not 40 < usdinr < 200:  # a bad tick would silently distort every USD holding
+            raise ValueError(f"implausible USD/INR {usdinr}")
         fx = {"INR": 1.0, "USD": usdinr} if base == "INR" else {"INR": 1 / usdinr, "USD": 1.0}
     except Exception:
         usdinr = None
 
     rows, errors, series = [], [], {}
+    if usdinr is None:
+        errors.append("No reliable USD/INR rate - INR and USD holdings are added without currency conversion.")
     for h, data in zip(holdings, loaded):
         if data is None:
             errors.append(f"No data for {h['symbol']}")

@@ -230,6 +230,9 @@ def _safe(fn, default):
         return default
 
 
+DEMO_FX = {"INR=X": 85.0}
+
+
 class DemoProvider(DataProvider):
     """Deterministic synthetic market data (clearly flagged as demo in the UI)."""
 
@@ -249,14 +252,17 @@ class DemoProvider(DataProvider):
         is_index = symbol.startswith("^")
         dates = pd.bdate_range(end=self.end, periods=self.years * 252)
         n = len(dates)
-        mu = 0.10 if is_index else rng.uniform(0.04, 0.22)
-        sigma = 0.17 if is_index else rng.uniform(0.20, 0.38)
+        is_fx = symbol.endswith("=X")
+        mu = 0.10 if is_index else 0.03 if is_fx else rng.uniform(0.04, 0.22)
+        sigma = 0.17 if is_index else 0.05 if is_fx else rng.uniform(0.20, 0.38)
         daily = rng.normal(mu / 252 - sigma**2 / 504, sigma / np.sqrt(252), n)
         # A market-wide crash around March 2020 so drawdown analysis has something to find.
         crash = (dates >= "2020-02-20") & (dates <= "2020-03-23")
         daily[crash] -= (0.30 if is_index else rng.uniform(0.25, 0.45)) / max(crash.sum(), 1)
         start_price = 100.0 if is_index else rng.uniform(80, 2500)
         close = start_price * np.exp(np.cumsum(daily))
+        if is_fx:  # keep currency pairs at a plausible level so portfolio FX conversion stays sane
+            close = close * (DEMO_FX.get(symbol, 1.0) / close[-1])
         open_ = close * np.exp(rng.normal(0, sigma / 60, n))
         high = np.maximum(open_, close) * (1 + np.abs(rng.normal(0, sigma / 50, n)))
         low = np.minimum(open_, close) * (1 - np.abs(rng.normal(0, sigma / 50, n)))

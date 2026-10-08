@@ -152,6 +152,23 @@ def test_portfolio_mixed_currency():
     assert res["risk"]["correlation"]["matrix"] and res["allocation"]["country"]
 
 
+def test_portfolio_rejects_implausible_fx(monkeypatch):
+    real = DEMO.get_history
+
+    def bad_fx(symbol, *a, **k):
+        h = real(symbol, *a, **k)
+        return h * 40 if symbol == "INR=X" else h  # e.g. a bad tick of ~3400
+
+    monkeypatch.setattr(DEMO, "get_history", bad_fx)
+    res = analyze_portfolio(DEMO, [{"symbol": "TCS", "quantity": 1}, {"symbol": "AAPL", "quantity": 1}], base="INR")
+    assert res["usd_inr"] is None
+    assert any("USD/INR" in e for e in res["errors"])
+
+
+def test_demo_fx_is_plausible():
+    assert 40 < float(DEMO.get_history("INR=X")["Close"].iloc[-1]) < 200
+
+
 def test_thesis_check(report):
     m = report["metrics"]
     res = check_thesis(report, [
@@ -249,3 +266,12 @@ def test_ai_rate_limit(client, monkeypatch):
     monkeypatch.setattr(api, "ai_limiter", api.RateLimiter(1, window=3600))
     assert client.post("/api/ai/ask", json={"question": "a"}).status_code == 503  # allowed, not configured
     assert client.post("/api/ai/ask", json={"question": "a"}).status_code == 429
+
+
+def test_metric_signals():
+    from investiq.analysis.metrics import signal
+    assert signal("roe_pct", 20) == "good" and signal("roe_pct", 10) == "ok" and signal("roe_pct", 3) == "weak"
+    assert signal("pe", 15) == "good" and signal("pe", 50) == "weak" and signal("pe", -4) == "weak"
+    assert signal("debt_to_equity", 3, financial_sector=True) is None
+    assert signal("max_drawdown_pct", -20) == "good" and signal("max_drawdown_pct", -70) == "weak"
+    assert signal("unknown", 1) is None and signal("roe_pct", None) is None

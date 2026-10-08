@@ -268,7 +268,13 @@
         </table></div>
         <p class="sub" style="margin-top:10px">"Gained" = share of holding periods that made money; "&gt;10%/yr" = share that beat 10% a year. Longer holding periods usually narrow the range between worst and best - that is the case for patience.</p>
       </div>
-    </section>
+    </section>`;
+  }
+
+  function dividends(r) {
+    const cur = r.currency;
+    const d = r.breakdown.dividends;
+    return `
     <section id="dividends" class="section grid grid-2">
       <div class="card">
         <h2>Dividends</h2>
@@ -386,7 +392,7 @@
       ], (v) => v + "%");
     }
     const s = r.breakdown.seasonality;
-    charts.bars($("#season-chart"), s.map((x) => x.month), s.map((x) => x.avg_pct), "Average return", (v) => fmt.pct(v, 1), true);
+    if ($("#season-chart")) charts.bars($("#season-chart"), s.map((x) => x.month), s.map((x) => x.avg_pct), "Average return", (v) => fmt.pct(v, 1), true);
     const d = r.breakdown.dividends;
     if (d.paid && $("#div-chart")) {
       charts.bars($("#div-chart"), d.years.map((y) => String(y.year)), d.years.map((y) => y.dividend), "Dividend per share", (v) => fmt.money(v, cur), false);
@@ -405,9 +411,10 @@
       $("#ps-out").innerHTML = `Buy up to <strong>${fmt.n(qty, 0)} shares</strong> at about ${fmt.money(price, cur)} (${fmt.money(qty * price, cur, 0)}, ${fmt.pct(capital ? (qty * price / capital) * 100 : 0, 0, false)} of capital).
         If the stop-loss hits you lose about <strong class="down">${fmt.money(qty * perShare, cur, 0)}</strong>.${byCash < byRisk ? " Limited by your capital." : ""}`;
     };
+    if (!$("#ps-capital")) return;
     ["#ps-capital", "#ps-risk", "#ps-stop"].forEach((sel) => $(sel).addEventListener("input", calc));
     calc();
   }
 
-  window.sections = { decision, valuationExtra, financials, breakdown, bind, freshness, srcLine, quality, sources: sourcesPanel };
+  window.sections = { decision, valuationExtra, financials, breakdown, dividends, bind, freshness, srcLine, quality, sources: sourcesPanel };
 })();

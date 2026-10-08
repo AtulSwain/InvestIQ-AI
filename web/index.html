@@ -1,53 +1,77 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>InvestIQ</title>
-  <meta name="description" content="Personal stock research: performance, risk, valuation and future scenarios for any stock.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232a78d6'/><path d='M7 22l6-7 5 4 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <title>InvestIQ · Research Terminal</title>
+  <meta name="description" content="Equity research terminal: markets, company research, valuation, news, AI research with citations, portfolio and thesis tracking.">
+  <meta name="theme-color" content="#0a0b0d">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%234f8cff'/><path d='M7 22l6-7 5 4 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <script>
+    // Apply the saved theme before first paint (dark is the default).
+    try { var t = JSON.parse(localStorage.getItem("investiq.theme")); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
   <link rel="stylesheet" href="static/styles.css">
   <script src="static/vendor/chart.umd.js"></script>
   <script src="static/vendor/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="#/">
-      <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--series-1)"/><path d="M7 22l6-7 5 4 7-9" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>InvestIQ</span>
-    </a>
-    <form class="search" id="search-form" autocomplete="off" role="search">
-      <input id="search-input" type="search" placeholder="Search a stock - e.g. Reliance, TCS, INFY.NS, AAPL" aria-label="Search stocks">
-      <ul id="search-results" class="search-results" role="listbox" hidden></ul>
-    </form>
-    <nav class="nav">
-      <a href="#/" data-nav="home">Home</a>
-      <a href="#/compare" data-nav="compare">Compare</a>
-      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle dark mode" title="Toggle theme"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 2.5a7.5 7.5 0 0 1 0 15z" fill="currentColor"/></svg></button>
-    </nav>
-  </header>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#/">
+        <svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M7 22l6-7 5 4 7-9" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>InvestIQ <small>Terminal</small></span>
+      </a>
+      <nav id="nav"></nav>
+      <div class="sidebar-foot">Research tool, not investment advice.<br><span id="nav-status"></span></div>
+    </aside>
 
-  <div id="demo-banner" class="banner" hidden>
-    Demo mode: showing synthetic data, not real prices. Start without <code>--demo</code> for live market data.
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Open navigation"></button>
+        <button class="search-trigger" id="search-trigger" type="button" aria-label="Search stocks and commands (Ctrl+K)">
+          <span class="ico-search"></span><span>Search stocks, pages, actions…</span><span class="kbd">Ctrl K</span>
+        </button>
+        <div class="topbar-right">
+          <span class="status-pill" id="status-pill" title="Data source"><span class="dot"></span><span class="txt">Connecting…</span></span>
+          <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle light/dark theme" title="Toggle theme (T)"></button>
+        </div>
+      </header>
+
+      <div id="demo-banner" class="banner" hidden>Demo mode: synthetic data, not real prices.</div>
+      <div id="static-banner" class="notice" hidden></div>
+
+      <main id="app" class="content" tabindex="-1"></main>
+
+      <footer class="footer">
+        InvestIQ is a research tool, not investment advice. Market data from Yahoo Finance and optional providers may be delayed or incomplete; every figure shows its source.
+      </footer>
+    </div>
   </div>
-
-  <div id="static-banner" class="notice" hidden>
-    Daily snapshot of <span id="static-count"></span> stocks, last updated <span id="static-date"></span>.
-    Run InvestIQ on your computer to research any stock with live prices.
-  </div>
-
-  <main id="app"></main>
-
-  <footer class="footer">
-    InvestIQ is a research tool, not investment advice. Data from Yahoo Finance may be delayed or incomplete.
-  </footer>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
 
   <script src="static/config.js"></script>
   <script src="static/format.js"></script>
   <script src="static/glossary.js"></script>
+  <script src="static/store.js"></script>
+  <script src="static/ui.js"></script>
   <script src="static/data.js"></script>
   <script src="static/charts.js"></script>
   <script src="static/sections.js"></script>
+  <script src="static/views/dashboard.js"></script>
+  <script src="static/views/markets.js"></script>
+  <script src="static/views/discover.js"></script>
+  <script src="static/views/stock.js"></script>
+  <script src="static/views/news.js"></script>
+  <script src="static/views/screener.js"></script>
+  <script src="static/views/compare.js"></script>
+  <script src="static/views/watchlist.js"></script>
+  <script src="static/views/portfolio.js"></script>
+  <script src="static/views/ai.js"></script>
+  <script src="static/views/workspace.js"></script>
+  <script src="static/views/reports.js"></script>
+  <script src="static/views/alerts.js"></script>
+  <script src="static/views/learn.js"></script>
   <script src="static/app.js"></script>
 </body>
 </html>

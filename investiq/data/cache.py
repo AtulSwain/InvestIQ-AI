@@ -23,7 +23,7 @@ TTL = {
     "fundamentals": 12 * 3600,  # ratios, estimates, targets
     "statements": 24 * 3600,
     "news": 15 * 60,
-    "macro": 6 * 3600,
+    "macro": 24 * 3600,      # macro series update monthly; 6 Alpha Vantage calls/day
 }
 
 

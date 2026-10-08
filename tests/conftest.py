@@ -1,6 +1,6 @@
 import pytest
 
-from investiq import api
+from investiq import ai, api
 from investiq.data import cache as cache_mod
 from investiq.data import http as http_mod
 from investiq.data.sources import all_sources
@@ -17,6 +17,8 @@ def isolated_environment(monkeypatch):
     cache_mod.set_cache(cache_mod.Cache(":memory:"))
     http_mod.set_client(None)
     monkeypatch.setattr(api, "limiter", api.RateLimiter(10_000))
+    monkeypatch.setattr(api, "ai_limiter", api.RateLimiter(10_000, window=3600))
+    ai.set_client(None)
     for src in all_sources():
         src.last_error = src.last_error_at = src.last_ok_at = None
     yield

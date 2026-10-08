@@ -69,7 +69,7 @@ def test_health_lists_providers_without_secrets(client, monkeypatch):
     fmp = next(p for p in body["providers"] if p["id"] == "fmp")
     assert fmp["configured"] is True and fmp["env_vars"] == ["FMP_API_KEY"]
     assert "super-secret-value" not in str(body)
-    assert body["ai"] == {"configured": False}
+    assert body["ai"] == {"configured": False, "model": None}
 
 
 def test_quote_endpoint_falls_back_to_last_close(client):

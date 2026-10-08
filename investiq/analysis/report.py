@@ -11,7 +11,11 @@ from ..data.validation import validate_stock
 from ..data.symbols import benchmark_for, currency_for, market_for, resolve_candidates
 from .decision import buy_checklist, trade_plan
 from .financials import analyze_financials
+from ..data.extended import get_extended
 from .fundamentals import analyze_fundamentals
+from .metrics import build_metrics
+from .news import big_moves_with_news, link_to_price
+from .risk_profile import risk_profile
 from .performance import analyze_breakdown, analyze_performance
 from .projection import analyze_projection
 from .risk import analyze_risk
@@ -48,8 +52,13 @@ def _benchmark_close(provider: DataProvider, symbol: str):
         return None
 
 
-def _price_chart(hist: pd.DataFrame, sma50: pd.Series, sma200: pd.Series) -> dict:
+def _price_chart(hist: pd.DataFrame, sma50: pd.Series, sma200: pd.Series, ohlc_days: int = 500) -> dict:
+    recent = hist.iloc[-ohlc_days:]
     return {
+        # Daily OHLC for the candlestick view (last ~2 years keeps report files small).
+        "ohlc": {"dates": [date_str(d) for d in recent.index], "open": [num(v, 2) for v in recent["Open"]],
+                 "high": [num(v, 2) for v in recent["High"]], "low": [num(v, 2) for v in recent["Low"]],
+                 "close": [num(v, 2) for v in recent["Close"]]},
         "dates": [date_str(d) for d in hist.index],
         "close": [num(v, 2) for v in hist["Close"]],
         "volume": [num(v, 0) for v in hist["Volume"]],
@@ -90,7 +99,8 @@ METHODS = [
 ]
 
 
-def build_report(provider: DataProvider, query: str, live_quotes: bool | None = None) -> dict:
+def build_report(provider: DataProvider, query: str, live_quotes: bool | None = None,
+                 with_extended: bool = True) -> dict:
     data = load_stock(provider, query)
     symbol = data.symbol
     market = market_for(symbol)
@@ -156,7 +166,7 @@ def build_report(provider: DataProvider, query: str, live_quotes: bool | None = 
             quality.append({"level": "info", "area": "quote",
                             "message": "Live quote unavailable, showing the last close. " + "; ".join(errors[:2])})
 
-    return {
+    report = {
         "symbol": symbol,
         "name": fund["name"],
         "market": market,
@@ -185,6 +195,25 @@ def build_report(provider: DataProvider, query: str, live_quotes: bool | None = 
         "benchmark_chart": _benchmark_chart(bench),
         "disclaimer": DISCLAIMER,
     }
+
+    # Extras (news, earnings, ownership, filings) feed risk scoring; failures only drop those parts.
+    extended = None
+    if with_extended:
+        try:
+            extended = get_extended(symbol, demo=provider.is_demo)
+            extended = {**extended, "news": link_to_price(extended.get("news") or [], close)}
+            extended["moves"] = big_moves_with_news(close, extended["news"])
+            report["sources"] += [s for s in extended.get("sources", []) if s["id"] not in {x["id"] for x in sources}]
+        except Exception as exc:  # network / parsing - keep the core report
+            quality.append({"level": "info", "area": "extras",
+                            "message": f"News, earnings and ownership data were unavailable ({type(exc).__name__})."})
+    report["extended"] = extended
+    report["metrics"] = build_metrics(report)
+    report["risk_profile"] = risk_profile(report, extended)
+    report["section_sources"] = {**SECTION_SOURCES, "news": ["news", "news_finnhub"], "earnings": ["earnings", "quarterly_statements"],
+                                 "ownership": ["ownership", "company_profile"], "filings": ["filings"],
+                                 "analyst": ["analyst"], "risk_profile": ["method_risk", "financial_statements", "news"]}
+    return report
 
 
 def _benchmark_chart(bench):

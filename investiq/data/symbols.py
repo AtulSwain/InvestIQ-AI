@@ -133,3 +133,59 @@ def resolve_candidates(raw: str) -> list[str]:
         return [local[0]["symbol"]]
     # Unknown bare ticker: try NSE first (primary use case), then as-is (US).
     return [s + ".NS", s, s + ".BO"]
+
+
+# Sector for each built-in stock (used for sector performance, peers and the screener when the
+# data source has no sector). Broad, GICS-like buckets.
+SECTORS = {
+    # India
+    "RELIANCE": "Energy", "ONGC": "Energy", "COALINDIA": "Energy", "NTPC": "Utilities",
+    "POWERGRID": "Utilities", "TATAPOWER": "Utilities", "ADANIENT": "Industrials",
+    "TCS": "Information Technology", "INFY": "Information Technology", "HCLTECH": "Information Technology",
+    "WIPRO": "Information Technology", "TECHM": "Information Technology",
+    "HDFCBANK": "Financials", "ICICIBANK": "Financials", "SBIN": "Financials", "KOTAKBANK": "Financials",
+    "AXISBANK": "Financials", "INDUSINDBK": "Financials", "BAJFINANCE": "Financials",
+    "BAJAJFINSV": "Financials", "HDFCLIFE": "Financials",
+    "BHARTIARTL": "Communication Services",
+    "ITC": "Consumer Staples", "HINDUNILVR": "Consumer Staples", "NESTLEIND": "Consumer Staples",
+    "BRITANNIA": "Consumer Staples", "DMART": "Consumer Staples",
+    "MARUTI": "Consumer Discretionary", "TATAMOTORS": "Consumer Discretionary", "M&M": "Consumer Discretionary",
+    "EICHERMOT": "Consumer Discretionary", "HEROMOTOCO": "Consumer Discretionary", "TITAN": "Consumer Discretionary",
+    "ASIANPAINT": "Materials", "ETERNAL": "Consumer Discretionary", "IRCTC": "Consumer Discretionary",
+    "SUNPHARMA": "Health Care", "DRREDDY": "Health Care", "CIPLA": "Health Care", "DIVISLAB": "Health Care",
+    "APOLLOHOSP": "Health Care",
+    "LT": "Industrials", "ADANIPORTS": "Industrials", "HAL": "Industrials", "BEL": "Industrials",
+    "ULTRACEMCO": "Materials", "GRASIM": "Materials", "TATASTEEL": "Materials", "JSWSTEEL": "Materials",
+    "VEDL": "Materials", "PIDILITIND": "Materials",
+    # US
+    "AAPL": "Information Technology", "MSFT": "Information Technology", "NVDA": "Information Technology",
+    "AMD": "Information Technology", "GOOGL": "Communication Services", "META": "Communication Services",
+    "NFLX": "Communication Services", "AMZN": "Consumer Discretionary", "TSLA": "Consumer Discretionary",
+    "BRK-B": "Financials", "JPM": "Financials", "V": "Financials",
+}
+
+
+def sector_for(symbol: str) -> str | None:
+    base = symbol.upper().split(".")[0] if symbol.upper().endswith((".NS", ".BO")) else symbol.upper()
+    return SECTORS.get(base)
+
+
+def universe() -> list[str]:
+    """Yahoo tickers of every built-in stock (the snapshot / dashboard universe)."""
+    return [s + ".NS" for s in POPULAR_INDIA] + list(POPULAR_US)
+
+
+# Market dashboard instruments: (yahoo symbol, display name, group, region)
+INDICES = [
+    ("^NSEI", "NIFTY 50", "index", "IN"), ("^BSESN", "SENSEX", "index", "IN"),
+    ("^NSEBANK", "NIFTY Bank", "index", "IN"), ("^CNXIT", "NIFTY IT", "index", "IN"),
+    ("^GSPC", "S&P 500", "index", "US"), ("^IXIC", "Nasdaq Composite", "index", "US"),
+    ("^DJI", "Dow Jones", "index", "US"),
+]
+MACRO_MARKETS = [
+    ("^INDIAVIX", "India VIX", "volatility", "IN"), ("^VIX", "CBOE VIX", "volatility", "US"),
+    ("^TNX", "US 10Y yield", "rates", "US"), ("^IRX", "US 3M T-bill", "rates", "US"),
+    ("INR=X", "USD/INR", "fx", "IN"), ("DX-Y.NYB", "US Dollar Index", "fx", "US"),
+    ("GC=F", "Gold", "commodity", "GLOBAL"), ("BZ=F", "Brent crude", "commodity", "GLOBAL"),
+    ("CL=F", "WTI crude", "commodity", "GLOBAL"), ("SI=F", "Silver", "commodity", "GLOBAL"),
+]

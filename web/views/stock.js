@@ -48,7 +48,7 @@
       <div class="stock-head">
         <div><div class="crumbs"><a href="#/research">Research</a> / ${esc(f.sector || r.market)}</div>
           <h1>${esc(r.name)}</h1>
-          <div class="meta"><span class="ticker">${esc(r.symbol)}</span> · ${esc(f.exchange || r.market)}${f.industry ? " · " + esc(f.industry) : ""} · ${esc(cur)}${f.market_cap_category ? " · " + esc(f.market_cap_category) : ""}</div></div>
+          <div class="meta"><span class="ticker">${esc(r.symbol)}</span> · ${(() => { const b = brands.forExchange(f.exchange, r.symbol); return b ? `<span class="with-logo" title="Listed on ${esc(brands.ALL[b].name)}">${brands.logo(b, { size: 14 })}</span> ` : ""; })()}${esc(f.exchange || r.market)}${f.industry ? " · " + esc(f.industry) : ""} · ${esc(cur)}${f.market_cap_category ? " · " + esc(f.market_cap_category) : ""}</div></div>
         <div><div class="price">${fmt.money(q.price, cur)}</div>
           <div class="delta ${fmt.signedClass(q.change)}">${q.change >= 0 ? "▲" : "▼"} ${fmt.money(Math.abs(q.change), cur)} (${fmt.pct(q.change_pct, 2)})</div></div>
         <div class="row no-print">
@@ -333,10 +333,10 @@
     const fl = r.extended?.filings || {};
     return `<section class="card section"><h2>Filings & announcements</h2>
       ${fl.items?.length ? `<div class="table-wrap"><table class="compact"><thead><tr><th class="l">Date</th><th class="l">Type</th><th class="l">Title</th><th class="l">Exhibits</th></tr></thead><tbody>
-        ${fl.items.map((x) => `<tr><td class="l">${fmt.date(x.date)}</td><td class="l"><span class="badge">${esc(x.type || "")}</span></td><td class="l wrap">${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title || x.type)}</a>` : esc(x.title || "")}</td>
+        ${fl.items.map((x) => `<tr><td class="l">${fmt.date(x.date)}</td><td class="l"><span class="badge">${esc(x.type || "")}</span></td><td class="l wrap"><span class="with-logo">${brands.logo("sec", { size: 14 })}${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title || x.type)}</a>` : esc(x.title || "")}</span></td>
           <td class="l">${(x.exhibits || []).map((ex) => `<a href="${esc(ex.url)}" target="_blank" rel="noopener">${esc(ex.name)}</a>`).join(", ")}</td></tr>`).join("")}</tbody></table></div>` : ""}
       ${fl.note ? `<p class="muted" style="font-size:12.5px">${esc(fl.note)}</p>` : ""}
-      ${fl.links?.length ? `<h3>Official sources</h3><div class="chips">${fl.links.map((l) => `<a class="chip" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)} ${ui.icon("external")}</a>`).join("")}</div>` : ""}
+      ${fl.links?.length ? `<h3>Official sources</h3><div class="chips">${fl.links.map((l) => `<a class="chip with-logo" href="${esc(l.url)}" target="_blank" rel="noopener">${brands.forUrl(l.url, { size: 14 })} ${esc(l.label)} ${ui.icon("external")}</a>`).join("")}</div>` : ""}
       ${!fl.items?.length && !fl.links?.length ? ui.empty("No filings", "No filings source is available for this listing.") : ""}
       ${extSrc(r, "filings")}</section>`;
   }
@@ -491,7 +491,7 @@
       <section class="card section"><div class="card-head"><h2>Metric provenance</h2><button class="btn sm" id="m-csv">${ui.icon("download")} CSV</button></div>
         <div class="table-wrap"><table class="compact"><thead><tr><th class="l">Metric</th><th>Value</th><th class="l">Period</th><th>Currency</th><th>Type</th><th class="l">Source · as of</th></tr></thead><tbody>
         ${ms.map(([, m]) => `<tr><td class="l">${esc(m.label)}</td><td>${ui.fmtUnit(m.value, m.unit, m.currency)} ${ui.sig(m.signal)}</td><td class="l">${esc(m.period || "—")}</td><td>${esc(m.currency || "—")}</td>
-          <td><span class="badge">${STATUS[m.status] || esc(m.status)}</span></td><td class="l">${esc(ui.provText(m, r))}</td></tr>`).join("")}</tbody></table></div></section>
+          <td><span class="badge">${STATUS[m.status] || esc(m.status)}</span></td><td class="l">${(() => { const src = (r.sources || []).find((x) => x.id === m.source); const b = src && brands.forProvider(src.provider); return b ? brands.logo(b, { size: 12 }) + " " : ""; })()}${esc(ui.provText(m, r))}</td></tr>`).join("")}</tbody></table></div></section>
       ${sections.sources(r)}
       ${(r.extended?.sources || []).length ? `<section class="card section"><h2>Extended data sources</h2><div class="table-wrap"><table class="compact"><thead><tr><th class="l">Dataset</th><th class="l">Provider</th><th>Fetched</th><th class="l">Method</th></tr></thead><tbody>
         ${r.extended.sources.map((s) => `<tr><td class="l">${esc(s.dataset)}</td><td class="l">${esc(s.provider_label)}</td><td>${esc((s.fetched_at || "").replace("T", " ").slice(0, 16))}</td><td class="l wrap">${esc(s.methodology || "")}</td></tr>`).join("")}</tbody></table></div></section>` : ""}`;
@@ -516,7 +516,7 @@
         const v = q.value.trim();
         if (!v) { el.querySelector("#r-sugg").innerHTML = ""; return; }
         const res = await data.search(v).catch(() => []);
-        el.querySelector("#r-sugg").innerHTML = res.slice(0, 8).map((s) => `<div class="list-row" data-open="${esc(s.symbol)}"><span class="nm"><span class="ticker">${esc(s.symbol)}</span> <span class="muted">${esc(s.name)}</span></span><span class="muted">${esc(s.exchange || "")}</span><span></span></div>`).join("");
+        el.querySelector("#r-sugg").innerHTML = res.slice(0, 8).map((s) => `<div class="list-row" data-open="${esc(s.symbol)}"><span class="nm">${(() => { const b = brands.forExchange(s.exchange, s.symbol); return b ? brands.logo(b, { size: 14 }) + " " : ""; })()}<span class="ticker">${esc(s.symbol)}</span> <span class="muted">${esc(s.name)}</span></span><span class="muted">${esc(s.exchange || "")}</span><span></span></div>`).join("");
       }, 200);
     });
     el.querySelector("#r-form").addEventListener("submit", (e) => { e.preventDefault(); if (q.value.trim()) ui.go(`#/research/${encodeURIComponent(q.value.trim())}`); });

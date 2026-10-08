@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import pandas as pd
 
+from ..data.provenance import now_iso, source
 from ..data.provider import DataProvider, DataUnavailableError
+from ..data.sources import live_quote
+from ..data.validation import validate_stock
 from ..data.symbols import benchmark_for, currency_for, market_for, resolve_candidates
 from .decision import buy_checklist, trade_plan
 from .financials import analyze_financials
+from ..data.extended import get_extended
 from .fundamentals import analyze_fundamentals
+from .metrics import build_metrics
+from .news import big_moves_with_news, link_to_price
+from .risk_profile import risk_profile
 from .performance import analyze_breakdown, analyze_performance
 from .projection import analyze_projection
 from .risk import analyze_risk
@@ -45,8 +52,13 @@ def _benchmark_close(provider: DataProvider, symbol: str):
         return None
 
 
-def _price_chart(hist: pd.DataFrame, sma50: pd.Series, sma200: pd.Series) -> dict:
+def _price_chart(hist: pd.DataFrame, sma50: pd.Series, sma200: pd.Series, ohlc_days: int = 500) -> dict:
+    recent = hist.iloc[-ohlc_days:]
     return {
+        # Daily OHLC for the candlestick view (last ~2 years keeps report files small).
+        "ohlc": {"dates": [date_str(d) for d in recent.index], "open": [num(v, 2) for v in recent["Open"]],
+                 "high": [num(v, 2) for v in recent["High"]], "low": [num(v, 2) for v in recent["Low"]],
+                 "close": [num(v, 2) for v in recent["Close"]]},
         "dates": [date_str(d) for d in hist.index],
         "close": [num(v, 2) for v in hist["Close"]],
         "volume": [num(v, 0) for v in hist["Volume"]],
@@ -55,7 +67,40 @@ def _price_chart(hist: pd.DataFrame, sma50: pd.Series, sma200: pd.Series) -> dic
     }
 
 
-def build_report(provider: DataProvider, query: str) -> dict:
+# Which provenance records back each report section (ids from data/provenance.py).
+SECTION_SOURCES = {
+    "quote": ["live_quote", "price_history"],
+    "chart": ["price_history", "benchmark_history"],
+    "performance": ["price_history", "benchmark_history", "method_returns"],
+    "risk": ["price_history", "benchmark_history", "method_risk"],
+    "technicals": ["price_history", "method_technicals"],
+    "fundamentals": ["company_profile", "financial_statements"],
+    "financials": ["financial_statements", "method_financials"],
+    "valuation": ["company_profile", "financial_statements", "price_history", "method_valuation"],
+    "projection": ["price_history", "method_projection"],
+    "scorecard": ["method_scorecard"],
+    "checklist": ["method_scorecard"],
+    "trade_plan": ["price_history", "method_valuation"],
+}
+
+METHODS = [
+    ("method_returns", "derived", "Total return, CAGR and XIRR from adjusted closes; SIP buys on the first "
+                                  "trading day of each month."),
+    ("method_risk", "derived", "Volatility = stdev of daily returns x sqrt(252); Sharpe/Sortino vs the "
+                               "market risk-free rate; beta from daily returns vs the benchmark index."),
+    ("method_technicals", "derived", "SMA 50/200, Wilder RSI(14), MACD(12,26,9), Bollinger(20,2), ATR(14)."),
+    ("method_financials", "derived", "Ratios computed from reported statements; Piotroski F-Score (9 tests); "
+                                     "Altman Z-Score (original manufacturing model)."),
+    ("method_valuation", "estimate", "Median of Graham, DCF, earnings-multiple, Lynch, historical-P/E, "
+                                     "dividend-discount and analyst-target values, outliers >4x removed."),
+    ("method_projection", "estimate", "Log-normal scenarios from 10-year volatility; drift blends the stock's "
+                                      "CAGR with a long-run market return. Not a forecast."),
+    ("method_scorecard", "derived", "Rule-based 0-10 scores and 15-point checklist from the sections above."),
+]
+
+
+def build_report(provider: DataProvider, query: str, live_quotes: bool | None = None,
+                 with_extended: bool = True) -> dict:
     data = load_stock(provider, query)
     symbol = data.symbol
     market = market_for(symbol)
@@ -83,7 +128,45 @@ def build_report(provider: DataProvider, query: str) -> dict:
     plan = trade_plan(price, tech, val, fund, proj)
     summary = build_summary(fund["name"], currency, price, perf, risk, tech, val, proj, score)
 
-    return {
+    # ---------- provenance, live quote, data quality ----------
+    sources = list(data.sources)
+    if bench is not None and len(bench):
+        sources.append(source("benchmark_history", "demo" if provider.is_demo else "yahoo",
+                              as_of=date_str(bench.index[-1]), period="Daily",
+                              methodology=f"{benchmark_for(symbol)} index closes"))
+    sources += [source(mid, "investiq", status=status, methodology=text) for mid, status, text in METHODS]
+
+    quote = {
+        "price": num(price, 2),
+        "change": num(price - prev, 2),
+        "change_pct": pct(price / prev - 1),
+        "day_high": num(hist["High"].iloc[-1], 2),
+        "day_low": num(hist["Low"].iloc[-1], 2),
+        "volume": num(hist["Volume"].iloc[-1], 0),
+        "source": "price_history",
+        "realtime": False,
+        "timestamp": date_str(close.index[-1]),
+    }
+    quality = validate_stock(data) + [{"level": "info", "area": "source", "message": n} for n in data.notes]
+    if live_quotes is None:
+        live_quotes = not provider.is_demo
+    if live_quotes:
+        lq, errors = live_quote(symbol)
+        if lq:
+            quote.update({
+                "price": num(lq["price"], 2), "change": num(lq["change"], 2), "change_pct": num(lq["change_pct"], 2),
+                "day_high": num(lq["high"], 2) or quote["day_high"], "day_low": num(lq["low"], 2) or quote["day_low"],
+                "volume": num(lq["volume"], 0) or quote["volume"], "source": "live_quote",
+                "realtime": lq["realtime"], "timestamp": lq["timestamp"],
+            })
+            sources.append(source("live_quote", lq["provider"], as_of=lq["timestamp"], currency=currency,
+                                  realtime=lq["realtime"], delayed=lq["delayed"],
+                                  methodology="Latest trade price; analysis sections use the last daily close"))
+        elif errors:
+            quality.append({"level": "info", "area": "quote",
+                            "message": "Live quote unavailable, showing the last close. " + "; ".join(errors[:2])})
+
+    report = {
         "symbol": symbol,
         "name": fund["name"],
         "market": market,
@@ -91,14 +174,11 @@ def build_report(provider: DataProvider, query: str) -> dict:
         "benchmark": benchmark_for(symbol),
         "is_demo": data.is_demo,
         "as_of": date_str(close.index[-1]),
-        "quote": {
-            "price": num(price, 2),
-            "change": num(price - prev, 2),
-            "change_pct": pct(price / prev - 1),
-            "day_high": num(hist["High"].iloc[-1], 2),
-            "day_low": num(hist["Low"].iloc[-1], 2),
-            "volume": num(hist["Volume"].iloc[-1], 0),
-        },
+        "quote": quote,
+        "generated_at": now_iso(),
+        "sources": sources,
+        "section_sources": SECTION_SOURCES,
+        "data_quality": quality,
         "summary": summary,
         "scorecard": score,
         "fundamentals": fund,
@@ -115,6 +195,25 @@ def build_report(provider: DataProvider, query: str) -> dict:
         "benchmark_chart": _benchmark_chart(bench),
         "disclaimer": DISCLAIMER,
     }
+
+    # Extras (news, earnings, ownership, filings) feed risk scoring; failures only drop those parts.
+    extended = None
+    if with_extended:
+        try:
+            extended = get_extended(symbol, demo=provider.is_demo)
+            extended = {**extended, "news": link_to_price(extended.get("news") or [], close)}
+            extended["moves"] = big_moves_with_news(close, extended["news"])
+            report["sources"] += [s for s in extended.get("sources", []) if s["id"] not in {x["id"] for x in sources}]
+        except Exception as exc:  # network / parsing - keep the core report
+            quality.append({"level": "info", "area": "extras",
+                            "message": f"News, earnings and ownership data were unavailable ({type(exc).__name__})."})
+    report["extended"] = extended
+    report["metrics"] = build_metrics(report)
+    report["risk_profile"] = risk_profile(report, extended)
+    report["section_sources"] = {**SECTION_SOURCES, "news": ["news", "news_finnhub"], "earnings": ["earnings", "quarterly_statements"],
+                                 "ownership": ["ownership", "company_profile"], "filings": ["filings"],
+                                 "analyst": ["analyst"], "risk_profile": ["method_risk", "financial_statements", "news"]}
+    return report
 
 
 def _benchmark_chart(bench):

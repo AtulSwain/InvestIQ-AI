@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from .provenance import now_iso, source
 from .symbols import POPULAR_INDIA, POPULAR_US, currency_for, market_for, search_local
 
 
@@ -36,6 +37,9 @@ class StockData:
     balance: pd.DataFrame = field(default_factory=pd.DataFrame)
     cashflow: pd.DataFrame = field(default_factory=pd.DataFrame)
     is_demo: bool = False
+    # Provenance records (see data/provenance.py) and notes about fallbacks used.
+    sources: list = field(default_factory=list)
+    notes: list = field(default_factory=list)
 
 
 class _TTLCache:
@@ -101,22 +105,47 @@ class YahooProvider(DataProvider):
         ticker = yf.Ticker(symbol)
         try:
             raw = ticker.history(period="max", auto_adjust=True, actions=True)
-        except Exception as exc:  # network errors, rate limits, parse errors
-            raise DataUnavailableError(f"Could not download prices for {symbol}: {exc}") from exc
-        hist = _clean_history(raw)
-        if hist.empty:
-            raise DataUnavailableError(f"No price history found for {symbol}")
+            hist = _clean_history(raw)
+            if hist.empty:
+                raise DataUnavailableError(f"No price history found for {symbol}")
+        except Exception as exc:  # network errors, rate limits (common on cloud hosts), parse errors
+            fallback = _keyed_fallback(symbol, with_fundamentals, exc)
+            if fallback is None:
+                if isinstance(exc, DataUnavailableError):
+                    raise
+                raise DataUnavailableError(f"Could not download prices for {symbol}: {exc}") from exc
+            self._cache.set(key, fallback)
+            return fallback
 
         dividends = hist["Dividends"] if "Dividends" in hist else pd.Series(dtype=float)
         dividends = dividends[dividends > 0]
         history = hist[["Open", "High", "Low", "Close", "Volume"]]
 
         data = StockData(symbol=symbol.upper(), history=history, dividends=dividends)
+        fetched = now_iso()
+        currency = currency_for(symbol)
+        data.sources.append(source(
+            "price_history", "yahoo", fetched_at=fetched, as_of=history.index[-1].strftime("%Y-%m-%d"),
+            period=f"Daily, {history.index[0]:%Y-%m-%d} to {history.index[-1]:%Y-%m-%d}", currency=currency,
+            delayed="End-of-day; intraday prices delayed ~15 min",
+            methodology="Split- and dividend-adjusted closes (yfinance auto_adjust)"))
         if with_fundamentals:
             data.info = _safe(lambda: dict(ticker.info or {}), {})
             data.income = _safe(lambda: ticker.income_stmt, pd.DataFrame())
             data.balance = _safe(lambda: ticker.balance_sheet, pd.DataFrame())
             data.cashflow = _safe(lambda: ticker.cashflow, pd.DataFrame())
+            if data.info:
+                data.sources.append(source(
+                    "company_profile", "yahoo", fetched_at=fetched, currency=data.info.get("currency") or currency,
+                    period="Trailing twelve months (TTM) where applicable",
+                    methodology="Yahoo Finance quoteSummary: profile, ratios, ownership, analyst targets"))
+            if not data.income.empty:
+                cols = pd.to_datetime(data.income.columns)
+                data.sources.append(source(
+                    "financial_statements", "yahoo", fetched_at=fetched,
+                    as_of=f"{cols.max():%Y-%m-%d}", period=f"Annual, FY{cols.min():%Y}-FY{cols.max():%Y}",
+                    currency=data.info.get("financialCurrency") or currency,
+                    methodology="Company-reported annual income statement, balance sheet and cash flow"))
         self._cache.set(key, data)
         return data
 
@@ -144,12 +173,64 @@ class YahooProvider(DataProvider):
         return results[:limit]
 
 
+def _keyed_fallback(symbol: str, with_fundamentals: bool, cause: Exception) -> StockData | None:
+    """US listings: rebuild price history (and a basic profile) from FMP / Twelve Data when Yahoo fails."""
+    from .sources import get_source, us_history_fallback
+
+    if market_for(symbol) != "US" or symbol.startswith("^"):
+        return None
+    rows, provider_id, _errors = us_history_fallback(symbol)
+    if not rows:
+        return None
+    df = pd.DataFrame(rows)
+    df.index = pd.DatetimeIndex(pd.to_datetime(df.pop("date")))
+    df = df.rename(columns=str.capitalize)[["Open", "High", "Low", "Close", "Volume"]].astype(float)
+    hist = _clean_history(df)
+    if hist.empty:
+        return None
+    data = StockData(symbol=symbol.upper(), history=hist)
+    data.notes.append(f"Yahoo Finance was unavailable ({type(cause).__name__}); prices come from "
+                      f"{provider_id}. Financial statements are not loaded in this fallback.")
+    data.sources.append(source(
+        "price_history", provider_id, as_of=hist.index[-1].strftime("%Y-%m-%d"),
+        period=f"Daily, {hist.index[0]:%Y-%m-%d} to {hist.index[-1]:%Y-%m-%d}", currency="USD",
+        delayed="End-of-day", methodology="Split-adjusted daily closes (dividends not reinvested)"))
+    if with_fundamentals:
+        fmp = get_source("fmp")
+        if fmp.configured:
+            try:
+                p = fmp.profile(symbol) or {}
+            except Exception:
+                p = {}
+            if p:
+                data.info = {
+                    "longName": p.get("companyName"), "sector": p.get("sector"), "industry": p.get("industry"),
+                    "currency": p.get("currency") or "USD", "exchange": p.get("exchange"),
+                    "marketCap": p.get("marketCap") or p.get("mktCap"), "beta": p.get("beta"),
+                    "longBusinessSummary": p.get("description"), "website": p.get("website"),
+                    "fullTimeEmployees": _int(p.get("fullTimeEmployees")),
+                }
+                data.sources.append(source("company_profile", "fmp", currency=data.info["currency"],
+                                           methodology="FMP company profile"))
+    return data
+
+
+def _int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def _safe(fn, default):
     try:
         value = fn()
         return default if value is None else value
     except Exception:
         return default
+
+
+DEMO_FX = {"INR=X": 85.0}
 
 
 class DemoProvider(DataProvider):
@@ -171,14 +252,17 @@ class DemoProvider(DataProvider):
         is_index = symbol.startswith("^")
         dates = pd.bdate_range(end=self.end, periods=self.years * 252)
         n = len(dates)
-        mu = 0.10 if is_index else rng.uniform(0.04, 0.22)
-        sigma = 0.17 if is_index else rng.uniform(0.20, 0.38)
+        is_fx = symbol.endswith("=X")
+        mu = 0.10 if is_index else 0.03 if is_fx else rng.uniform(0.04, 0.22)
+        sigma = 0.17 if is_index else 0.05 if is_fx else rng.uniform(0.20, 0.38)
         daily = rng.normal(mu / 252 - sigma**2 / 504, sigma / np.sqrt(252), n)
         # A market-wide crash around March 2020 so drawdown analysis has something to find.
         crash = (dates >= "2020-02-20") & (dates <= "2020-03-23")
         daily[crash] -= (0.30 if is_index else rng.uniform(0.25, 0.45)) / max(crash.sum(), 1)
         start_price = 100.0 if is_index else rng.uniform(80, 2500)
         close = start_price * np.exp(np.cumsum(daily))
+        if is_fx:  # keep currency pairs at a plausible level so portfolio FX conversion stays sane
+            close = close * (DEMO_FX.get(symbol, 1.0) / close[-1])
         open_ = close * np.exp(rng.normal(0, sigma / 60, n))
         high = np.maximum(open_, close) * (1 + np.abs(rng.normal(0, sigma / 50, n)))
         low = np.minimum(open_, close) * (1 - np.abs(rng.normal(0, sigma / 50, n)))
@@ -197,8 +281,15 @@ class DemoProvider(DataProvider):
         )
 
         data = StockData(symbol=symbol, history=history, dividends=dividends, is_demo=True)
+        data.sources.append(source("price_history", "demo", as_of=f"{dates[-1]:%Y-%m-%d}",
+                                   period=f"Daily, {dates[0]:%Y-%m-%d} to {dates[-1]:%Y-%m-%d}",
+                                   currency=currency_for(symbol), methodology="Synthetic random walk - not real prices"))
         if with_fundamentals and not is_index:
             self._fill_fundamentals(data, rng, price)
+            data.sources.append(source("company_profile", "demo", currency=currency_for(symbol),
+                                       methodology="Synthetic fundamentals - not real data"))
+            data.sources.append(source("financial_statements", "demo", currency=currency_for(symbol),
+                                       period="Annual, last 4 fiscal years", methodology="Synthetic statements"))
         return data
 
     def _fill_fundamentals(self, data: StockData, rng: np.random.Generator, price: float):
@@ -212,7 +303,8 @@ class DemoProvider(DataProvider):
         revenue = net_income / margin
         growth = rng.uniform(0.03, 0.18)
         years = pd.DatetimeIndex(
-            [pd.Timestamp(self.end.year - i - 1, 3, 31) for i in range(4)]
+            # Latest fiscal year ended 31 March; results are out by June.
+            [pd.Timestamp(self.end.year - i - (0 if self.end.month >= 6 else 1), 3, 31) for i in range(4)]
         )
         rev = [revenue / (1 + growth) ** i for i in range(4)]
         ni = [r * margin * rng.uniform(0.9, 1.1) for r in rev]

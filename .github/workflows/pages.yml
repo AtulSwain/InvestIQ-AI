@@ -30,6 +30,13 @@ jobs:
       - run: pytest -q
       - name: Build reports
         run: python -m investiq.build_static --out site
+        env:
+          # Optional: the hosted InvestIQ API (Settings -> Secrets and variables -> Actions -> Variables).
+          # When set, the site loads live reports from it and falls back to this snapshot.
+          INVESTIQ_API_URL: ${{ vars.INVESTIQ_API_URL }}
+          # Optional keys: let the snapshot fall back to FMP / Twelve Data if Yahoo blocks GitHub's runners.
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

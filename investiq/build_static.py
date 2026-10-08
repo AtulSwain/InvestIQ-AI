@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import traceback
+import math
 import os
 import re
 import shutil
@@ -48,14 +50,39 @@ def _index_row(report: dict) -> dict:
     return summary_row(report)
 
 
+def json_safe(obj):
+    """Replace NaN/inf (which real provider data sometimes contains) with None so strict JSON never fails."""
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [json_safe(v) for v in obj]
+    return obj
+
+
+def _dump(obj) -> str:
+    return json.dumps(json_safe(obj), separators=(",", ":"), allow_nan=False)
+
+
+def _gh(level: str, message: str) -> None:
+    """Print to stderr; inside GitHub Actions also as an annotation so failures are visible in the run summary."""
+    message = message.replace("\n", " ")[:900]
+    prefix = f"::{level}::" if os.environ.get("GITHUB_ACTIONS") else f"{level.upper()}: "
+    print(prefix + message, file=sys.stderr)
+
+
 def _attach_peers(reports: dict[str, dict], rows: dict[str, dict], limit: int = 6) -> None:
     """Snapshot peers: same-sector, same-market stocks from this build, with positioning ranks."""
     for sym, report in reports.items():
-        target = rows[sym]
-        peers = [r for s, r in rows.items() if s != sym and r["sector"] == target["sector"]
-                 and r["market"] == target["market"]][:limit]
-        report["peers"] = {"target": target, "peers": peers, "positioning": positioning(target, peers),
-                           "method": "Peers are same-sector stocks in today's InvestIQ snapshot."}
+        try:
+            target = rows[sym]
+            peers = [r for s, r in rows.items() if s != sym and r["sector"] == target["sector"]
+                     and r["market"] == target["market"]][:limit]
+            report["peers"] = {"target": target, "peers": peers, "positioning": positioning(target, peers),
+                               "method": "Peers are same-sector stocks in today's InvestIQ snapshot."}
+        except Exception as exc:  # peers are optional on the page
+            _gh("warning", f"peers for {sym} skipped: {type(exc).__name__}: {exc}")
 
 
 def _market_files(provider: DataProvider, reports: dict[str, dict], out: Path) -> None:
@@ -71,7 +98,7 @@ def _market_files(provider: DataProvider, reports: dict[str, dict], out: Path) -
         "earnings": upcoming_earnings(extended, days=60),
         "news": news[:100],
     }
-    (out / "data" / "market.json").write_text(json.dumps(market, separators=(",", ":"), allow_nan=False))
+    (out / "data" / "market.json").write_text(_dump(market))
 
 
 def site_config(api_base: str | None) -> str:
@@ -100,12 +127,13 @@ def build_site(provider: DataProvider, symbols: list[str], out: Path, pause: flo
         try:
             # Snapshots are read hours later, so never bake in a "real-time" quote.
             report = build_report(provider, symbol, live_quotes=False)
+            row = _index_row(report)
         except Exception as exc:  # one bad ticker must not stop the build
             failures.append({"symbol": symbol, "error": str(exc)[:200]})
-            print(f"[{i}/{len(symbols)}] {symbol}: FAILED {exc}", file=sys.stderr)
+            _gh("warning", f"[{i}/{len(symbols)}] {symbol} failed: {type(exc).__name__}: {exc}")
             continue
         reports[report["symbol"]] = report
-        row_map[report["symbol"]] = _index_row(report)
+        row_map[report["symbol"]] = row
         print(f"[{i}/{len(symbols)}] {report['symbol']}: ok")
         if pause:
             time.sleep(pause)
@@ -113,12 +141,12 @@ def build_site(provider: DataProvider, symbols: list[str], out: Path, pause: flo
     _attach_peers(reports, row_map)
     for sym, report in reports.items():
         path = out / "data" / "reports" / f"{report_filename(sym)}.json"
-        path.write_text(json.dumps(report, separators=(",", ":"), allow_nan=False))
+        path.write_text(_dump(report))
     if reports:
         try:
             _market_files(provider, reports, out)
         except Exception as exc:  # the dashboard degrades to empty states rather than failing the build
-            print(f"market data FAILED: {exc}", file=sys.stderr)
+            _gh("warning", f"market data failed: {type(exc).__name__}: {exc}")
 
     rows = sorted(row_map.values(), key=lambda r: (r["currency"] != "INR", r["symbol"]))
     index = {
@@ -127,7 +155,7 @@ def build_site(provider: DataProvider, symbols: list[str], out: Path, pause: flo
         "stocks": rows,
         "failed": failures,
     }
-    (out / "data" / "index.json").write_text(json.dumps(index, separators=(",", ":")))
+    (out / "data" / "index.json").write_text(_dump(index))
     return index
 
 
@@ -143,12 +171,18 @@ def main():
 
     symbols = [s.strip().upper() for s in args.symbols.split(",")] if args.symbols else default_universe()
     provider = DemoProvider() if args.demo else YahooProvider()
-    index = build_site(provider, symbols, Path(args.out), pause=0 if args.demo else args.pause,
-                       api_base=args.api_base)
+    try:
+        index = build_site(provider, symbols, Path(args.out), pause=0 if args.demo else args.pause,
+                           api_base=args.api_base)
+    except Exception as exc:
+        _gh("error", f"build failed: {type(exc).__name__}: {exc} | {traceback.format_exc(limit=-3)}")
+        raise
     print(f"Built {len(index['stocks'])} reports, {len(index['failed'])} failed -> {args.out}/")
     # Fail the workflow (and keep the previous deployment) if most downloads broke.
     if len(index["stocks"]) < max(1, len(symbols) // 2):
-        sys.exit("Too many failures; not publishing")
+        first = "; ".join(f"{f['symbol']}: {f['error']}" for f in index["failed"][:5])
+        _gh("error", f"Too many failures ({len(index['failed'])}/{len(symbols)}); not publishing. First errors: {first}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

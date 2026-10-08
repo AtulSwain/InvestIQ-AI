@@ -99,9 +99,10 @@ def risk_profile(report: dict, extended: dict | None = None) -> dict:
     news = ext.get("news") or []
     reg = [n for n in news if n.get("category") in ("regulatory", "lawsuit")]
     insiders = (ext.get("ownership") or {}).get("insider_transactions") or []
-    sells = sum(1 for t in insiders if "sale" in (t.get("transaction") or t.get("text") or "").lower())
-    buys = sum(1 for t in insiders if "buy" in (t.get("transaction") or t.get("text") or "").lower()
-               or "purchase" in (t.get("text") or "").lower())
+    def _txt(t, *keys):  # provider fields can be missing, NaN or non-strings
+        return " ".join(str(t.get(k)) for k in keys if isinstance(t.get(k), str)).lower()
+    sells = sum(1 for t in insiders if "sale" in _txt(t, "transaction", "text"))
+    buys = sum(1 for t in insiders if "buy" in _txt(t, "transaction", "text") or "purchase" in _txt(t, "text"))
     dim("Regulatory & legal (news)", [_scale(len(reg), 0, 5) if news else None],
         [f"{len(reg)} regulatory/legal headline(s) in the latest {len(news)} news items" if news else None] +
         [f"“{n['title']}”" for n in reg[:2]])

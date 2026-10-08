@@ -275,3 +275,26 @@ def test_metric_signals():
     assert signal("debt_to_equity", 3, financial_sector=True) is None
     assert signal("max_drawdown_pct", -20) == "good" and signal("max_drawdown_pct", -70) == "weak"
     assert signal("unknown", 1) is None and signal("roe_pct", None) is None
+
+
+def test_static_build_survives_nan_and_bad_fields(tmp_path, monkeypatch):
+    """Real provider data contains NaN and odd types; the Pages build must still publish."""
+    import json as _json
+    from investiq import build_static
+    from investiq.analysis import report as report_mod
+
+    real = report_mod.get_extended
+
+    def messy(symbol, demo=False):
+        ext = real(symbol, demo=demo)
+        ext["ownership"]["insider_transactions"] = [{"transaction": float("nan"), "text": None, "date": "2026-10-01"}]
+        ext["earnings"]["revenue_estimate_next"] = float("nan")
+        return ext
+
+    monkeypatch.setattr(report_mod, "get_extended", messy)
+    index = build_static.build_site(DEMO, ["TCS.NS", "INFY.NS"], tmp_path / "site")
+    assert len(index["stocks"]) == 2 and not index["failed"]
+    rep = _json.loads((tmp_path / "site" / "data" / "reports" / "TCS.NS.json").read_text())
+    assert rep["extended"]["earnings"]["revenue_estimate_next"] is None
+    assert rep["risk_profile"] is not None
+    assert build_static.json_safe({"a": [float("inf"), 1.0]}) == {"a": [None, 1.0]}

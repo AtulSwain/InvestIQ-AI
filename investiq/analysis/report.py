@@ -208,8 +208,17 @@ def build_report(provider: DataProvider, query: str, live_quotes: bool | None = 
             quality.append({"level": "info", "area": "extras",
                             "message": f"News, earnings and ownership data were unavailable ({type(exc).__name__})."})
     report["extended"] = extended
-    report["metrics"] = build_metrics(report)
-    report["risk_profile"] = risk_profile(report, extended)
+    # Derived layers must never cost the whole report: degrade to empty with a visible note.
+    try:
+        report["metrics"] = build_metrics(report)
+    except Exception as exc:
+        report["metrics"] = {}
+        quality.append({"level": "warning", "area": "metrics", "message": f"Metric summary could not be built ({type(exc).__name__})."})
+    try:
+        report["risk_profile"] = risk_profile(report, extended)
+    except Exception as exc:
+        report["risk_profile"] = None
+        quality.append({"level": "warning", "area": "risk profile", "message": f"Risk profile could not be built ({type(exc).__name__})."})
     report["section_sources"] = {**SECTION_SOURCES, "news": ["news", "news_finnhub"], "earnings": ["earnings", "quarterly_statements"],
                                  "ownership": ["ownership", "company_profile"], "filings": ["filings"],
                                  "analyst": ["analyst"], "risk_profile": ["method_risk", "financial_statements", "news"]}

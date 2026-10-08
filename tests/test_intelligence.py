@@ -298,3 +298,23 @@ def test_static_build_survives_nan_and_bad_fields(tmp_path, monkeypatch):
     assert rep["extended"]["earnings"]["revenue_estimate_next"] is None
     assert rep["risk_profile"] is not None
     assert build_static.json_safe({"a": [float("inf"), 1.0]}) == {"a": [None, 1.0]}
+
+
+def test_json_safe_handles_real_provider_types():
+    """yfinance returns datetime.date (SEC filings, calendar), numpy scalars and NaT; demo data never does."""
+    import datetime as dt
+    import numpy as np
+    from investiq.build_static import _dump
+
+    out = _dump({"d": dt.date(2026, 10, 1), "t": pd.Timestamp("2026-10-01"), "n": np.float64("nan"),
+                 "i": np.int64(3), "nat": pd.NaT, "b": True})
+    assert out == '{"d":"2026-10-01","t":"2026-10-01","n":null,"i":3,"nat":null,"b":true}'
+
+
+def test_sec_filing_dates_become_strings():
+    import datetime as dt
+    from investiq.data.extended import parse_sec_filings
+
+    rows = parse_sec_filings([{"date": dt.date(2026, 9, 30), "type": "10-Q", "title": "Quarterly report", "edgarUrl": "u"},
+                              {"epochDate": 1759190400, "type": "8-K", "title": "x"}])
+    assert [r["date"] for r in rows] == ["2026-09-30", "2025-09-30"]

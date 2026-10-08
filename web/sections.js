@@ -171,6 +171,7 @@
     <section id="financials" class="card section">
       <h2>Financial breakdown</h2>
       ${why("The company's report card for each year - sales, profit, margins, debt and cash.")}
+      ${srcLine(r, "financials")}
       <p class="sub">Annual statements, oldest to newest</p>
       <div class="table-wrap"><table class="fin">
         <thead><tr><th>Metric</th>${years.map((y) => `<th>FY${y.fiscal_year_end.slice(0, 4)}</th>`).join("")}</tr></thead>
@@ -296,6 +297,83 @@
     </section>`;
   }
 
+  /* ---------- 5. Data trust: freshness, quality warnings, sources ---------- */
+  const fmtTime = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso.length <= 10 ? iso + "T00:00:00" : iso);
+    if (isNaN(d)) return esc(iso);
+    return iso.length <= 10
+      ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+      : d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
+  };
+  const byId = (r) => Object.fromEntries((r.sources || []).map((s) => [s.id, s]));
+  const STATUS = { actual: "Reported", estimate: "Estimate", derived: "Calculated" };
+
+  /* Badges under the price: live/delayed, snapshot/live report, last updated. */
+  function freshness(r) {
+    const q = r.quote || {};
+    const qs = byId(r)[q.source] || {};
+    const priceBadge = q.realtime
+      ? `<span class="badge live">● Real-time · ${esc(qs.provider_label || "")}</span>`
+      : `<span class="badge">Delayed · ${q.source === "live_quote" ? esc(qs.provider_label || "") : "last close"}</span>`;
+    const origin = r._origin === "snapshot" ? '<span class="badge">Daily snapshot</span>'
+      : r._origin === "live" ? '<span class="badge live">Live report</span>' : "";
+    const updated = r.generated_at || r.as_of;
+    return `${priceBadge}${origin}<span class="muted">Price as of ${fmtTime(q.timestamp || r.as_of)} · Data last updated ${fmtTime(updated)}</span>`;
+  }
+
+  /* One-line attribution under a section heading. */
+  function srcLine(r, section) {
+    const all = byId(r);
+    const ids = (r.section_sources || {})[section] || [];
+    const used = ids.map((id) => all[id]).filter(Boolean);
+    if (!used.length) return "";
+    const data = used.filter((s) => s.provider !== "investiq");
+    const method = used.find((s) => s.provider === "investiq");
+    // One entry per provider (price + index history usually share one), newest as-of date first.
+    const seen = new Set();
+    const parts = data.filter((s) => !seen.has(s.provider) && seen.add(s.provider))
+      .map((s) => `${esc(s.provider_label)}${s.as_of ? ` · as of ${fmtTime(s.as_of)}` : ""}`);
+    const statusTag = method && method.status !== "actual" ? ` <span class="badge">${STATUS[method.status]}</span>` : "";
+    return `<p class="src-line">Source: ${parts.join(" + ") || "InvestIQ"}${statusTag} <a href="#" data-jump="sources">details</a></p>`;
+  }
+
+  /* Data-quality warnings (bad prices, stale statements, fallbacks). */
+  function quality(r) {
+    const items = r.data_quality || [];
+    if (!items.length) return "";
+    const icon = { error: "✗", warning: "!", info: "i" };
+    return `<section class="card section quality" aria-label="Data quality notes">
+      <h2>Data quality notes</h2>
+      <ul class="pill-list">${items.map((w) => `<li><span class="icon q-${w.level}">${icon[w.level] || "i"}</span><span><strong>${esc(w.area)}:</strong> ${esc(w.message)}</span></li>`).join("")}</ul>
+    </section>`;
+  }
+
+  /* Full provenance table. */
+  function sourcesPanel(r) {
+    const list = r.sources || [];
+    if (!list.length) return `<section id="sources" class="card section"><h2>Sources & methodology</h2>
+      <p class="muted">This report was built before source tracking was added. It will show sources after the next data refresh.</p></section>`;
+    const data = list.filter((s) => s.provider !== "investiq");
+    const methods = list.filter((s) => s.provider === "investiq");
+    const name = (id) => id.replace(/^method_/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+    return `<section id="sources" class="card section">
+      <h2>Sources & methodology</h2>
+      ${why("Where every number in this report comes from, how fresh it is, and how InvestIQ calculated the rest.")}
+      <div class="table-wrap"><table class="compact">
+        <thead><tr><th>Data</th><th class="l">Source</th><th>As of</th><th>Fetched</th><th class="l">Period</th><th>Currency</th><th>Type</th></tr></thead>
+        <tbody>${data.map((s) => `<tr>
+          <td>${esc(name(s.dataset))}${s.methodology ? `<div class="muted method-note">${esc(s.methodology)}</div>` : ""}</td>
+          <td class="l">${s.provider_url ? `<a href="${esc(s.provider_url)}" target="_blank" rel="noopener">${esc(s.provider_label)}</a>` : esc(s.provider_label)}${s.realtime ? ' <span class="badge live">real-time</span>' : s.delayed ? `<div class="muted">${esc(s.delayed)}</div>` : ""}</td>
+          <td>${fmtTime(s.as_of)}</td><td>${fmtTime(s.fetched_at)}</td>
+          <td class="l">${esc(s.period || "—")}</td><td>${esc(s.currency || "—")}</td>
+          <td><span class="badge">${STATUS[s.status] || esc(s.status)}</span></td></tr>`).join("")}</tbody>
+      </table></div>
+      <h3>How InvestIQ calculates</h3>
+      <ul class="method-list">${methods.map((s) => `<li><strong>${esc(name(s.dataset))}</strong> <span class="badge">${STATUS[s.status]}</span> - ${esc(s.methodology || "")}</li>`).join("")}</ul>
+    </section>`;
+  }
+
   /* ---------- wiring ---------- */
   function bind(r) {
     const cur = r.currency;
@@ -331,5 +409,5 @@
     calc();
   }
 
-  window.sections = { decision, valuationExtra, financials, breakdown, bind };
+  window.sections = { decision, valuationExtra, financials, breakdown, bind, freshness, srcLine, quality, sources: sourcesPanel };
 })();

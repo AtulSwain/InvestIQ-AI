@@ -104,6 +104,7 @@
     const [view, arg] = [hash.split("/")[0], hash.split("/").slice(1).join("/")];
     document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("active", a.dataset.nav === (view || "home")));
     charts.destroyAll();
+    renderToken++;
     if (view === "stock" && arg) return renderStock(arg);
     if (view === "compare") return renderCompare(arg);
     renderHome();
@@ -247,11 +248,26 @@
     return d.toISOString().slice(0, 10);
   }
 
+  let renderToken = 0; // bumped on every navigation so late responses don't paint over a newer page
+
   async function renderStock(query) {
+    const token = ++renderToken;
     loading(`Researching ${query}…`);
     let r;
-    try { r = await data.report(query); } catch (err) { return showError(err); }
-    if (!location.hash.includes(encodeURIComponent(query)) && !location.hash.includes(query)) return; // navigated away
+    // On GitHub Pages with a live server, the snapshot paints first and the live report replaces it.
+    const onLive = (liveReport) => {
+      if (token !== renderToken) return;
+      const y = window.scrollY;
+      paintStock(liveReport);
+      window.scrollTo(0, y);
+    };
+    try { r = await data.report(query, { onLive }); } catch (err) { if (token === renderToken) showError(err); return; }
+    if (token !== renderToken) return; // navigated away meanwhile
+    paintStock(r);
+  }
+
+  function paintStock(r) {
+    charts.destroyAll();
     document.title = `${r.symbol} · InvestIQ`;
 
     const cur = r.currency;
@@ -275,7 +291,8 @@
           </div>
           <div>
             <div class="price">${fmt.money(q.price, cur)}</div>
-            <div class="delta ${fmt.signedClass(q.change)}">${q.change >= 0 ? "▲" : "▼"} ${fmt.money(Math.abs(q.change), cur)} (${fmt.pct(q.change_pct, 2)}) <span class="muted" style="font-weight:400">· as of ${fmt.date(r.as_of)}</span></div>
+            <div class="delta ${fmt.signedClass(q.change)}">${q.change >= 0 ? "▲" : "▼"} ${fmt.money(Math.abs(q.change), cur)} (${fmt.pct(q.change_pct, 2)})</div>
+            <div class="data-badges">${sections.freshness(r)}</div>
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn" id="wl-btn"></button>
@@ -284,8 +301,10 @@
         </div>
       </section>
 
+      ${sections.quality(r)}
+
       <nav class="section-nav" aria-label="Report sections">
-        ${[["overview", "Overview"], ["decision", "Buy checklist"], ["chart", "Chart"], ["performance", "Performance"], ["falls", "Rises & falls"], ["breakdown", "Monthly & seasonal"], ["fundamentals", "Fundamentals"], ["financials", "Financials"], ["valuation", "Valuation"], ["future", "Future"], ["dividends", "Dividends"], ["technicals", "Technicals"]]
+        ${[["overview", "Overview"], ["decision", "Buy checklist"], ["chart", "Chart"], ["performance", "Performance"], ["falls", "Rises & falls"], ["breakdown", "Monthly & seasonal"], ["fundamentals", "Fundamentals"], ["financials", "Financials"], ["valuation", "Valuation"], ["future", "Future"], ["dividends", "Dividends"], ["technicals", "Technicals"], ["sources", "Sources"]]
           .map(([id, t]) => `<a href="#" data-jump="${id}">${t}</a>`).join("")}
       </nav>
 
@@ -348,6 +367,7 @@
       <section id="chart" class="card section">
         <h2>Price history</h2>
         ${why("How the share price has moved over time - use the buttons to zoom in or out.")}
+        ${sections.srcLine(r, "chart")}
         <p class="sub">Adjusted for splits and dividends · data since ${fmt.date(perf.history_start)} (${perf.history_years} years)</p>
         <div class="toolbar">
           <div class="seg" id="range-seg">${RANGES.map(([l]) => `<button type="button" data-range="${l}">${l}</button>`).join("")}</div>
@@ -364,6 +384,7 @@
         <div class="card">
           <h2>Returns</h2>
           ${why("How much the stock gained or lost over different periods, compared with the market index.")}
+          ${sections.srcLine(r, "performance")}
           <p class="sub">Total return and annualised (CAGR) vs ${benchName}</p>
           <div class="table-wrap"><table>
             <thead><tr><th>Period</th><th>${T("Return", "total_return")}</th><th>${T("CAGR")}</th><th>${T(benchName, "benchmark")}</th></tr></thead>
@@ -404,6 +425,7 @@
         <div class="card">
           <h2>Risk metrics</h2>
           ${why("How bumpy the ride has been, and whether the return was worth the risk.")}
+          ${sections.srcLine(r, "risk")}
           <p class="sub">${T("Risk-free rate")} assumed ${fmt.pct(risk.risk_free_rate_pct, 1, false)}</p>
           <div class="table-wrap"><table class="compact">
             <thead><tr><th>Window</th><th>${T("CAGR")}</th><th>${T("Volatility")}</th><th>${T("Max fall")}</th><th>${T("Sharpe")}</th><th>${T("Sortino")}</th><th>${T("VaR 95%", "var")}</th></tr></thead>
@@ -439,6 +461,7 @@
         <div class="card">
           <h2>Revenue & profit</h2>
           ${why("Whether the business itself is growing its sales and earnings.")}
+          ${sections.srcLine(r, "financials")}
           <p class="sub">Annual statements · revenue CAGR ${fmt.pct(f.revenue_cagr_pct)} · profit CAGR ${fmt.pct(f.profit_cagr_pct)}</p>
           ${f.statements.length ? `
             <div class="legend"><span><span class="swatch" style="background:var(--series-1);height:10px"></span> Revenue</span><span><span class="swatch" style="background:var(--series-2);height:10px"></span> Net income</span></div>
@@ -447,6 +470,7 @@
         <div class="card">
           <h2>Financial health</h2>
           ${why("Whether the company has manageable debt, enough cash and healthy margins.")}
+          ${sections.srcLine(r, "fundamentals")}
           <div class="table-wrap"><table><tbody>
             ${row("Forward P/E", fmt.n(f.forward_pe, 1))}
             ${row("PEG ratio", fmt.n(f.peg, 2), "peg")}
@@ -470,6 +494,7 @@
       <section id="valuation" class="card section">
         <h2>${T("Fair value estimate", "fair_value")}</h2>
         ${why("An estimate of what one share is really worth, compared with what it costs today.")}
+        ${sections.srcLine(r, "valuation")}
         <p class="sub">Growth assumption ${fmt.pct(val.growth_assumption_pct, 1, false)}${val.discount_rate_pct ? ` · discount rate ${fmt.pct(val.discount_rate_pct, 0, false)}` : ""}</p>
         ${val.fair_value ? `
           <div><span class="verdict">${esc(val.verdict)}</span> <span class="muted">· ${T("margin of safety", "margin_of_safety")} ${fmt.pct(val.margin_of_safety_pct)}</span></div>
@@ -487,6 +512,7 @@
         <div class="card">
           <h2>Future price scenarios</h2>
           ${why("A range of where the price could be in 1-10 years, from a bad case to a good case.")}
+          ${sections.srcLine(r, "projection")}
           <p class="sub">Expected return ${fmt.pct(proj.assumptions.expected_return_pct, 1, false)}/yr (own ${proj.assumptions.lookback_years}y history ${fmt.pct(proj.assumptions.historical_cagr_pct)} blended with market ${fmt.pct(proj.assumptions.long_run_market_return_pct, 0, false)}) · volatility ${fmt.pct(proj.assumptions.volatility_pct, 0, false)}</p>
           <div class="legend"><span><span class="swatch" style="background:var(--series-1)"></span> Base (median)</span><span><span class="swatch" style="background:var(--band);height:10px"></span> Bear–bull range (10th–90th percentile)</span></div>
           <div class="chart-box"><canvas id="fan-chart" aria-label="Future scenarios"></canvas></div>
@@ -518,6 +544,7 @@
         <div class="card">
           <h2>Technical signals</h2>
           ${why("What recent price trends and momentum suggest about the short term.")}
+          ${sections.srcLine(r, "technicals")}
           <p class="sub">${T("Trend")}: <strong>${esc(r.technicals.trend)}</strong> · ${r.technicals.bullish_signals} bullish / ${r.technicals.bearish_signals} bearish</p>
           <div class="table-wrap"><table>
             <thead><tr><th>Indicator</th><th>Value</th><th>Signal</th><th style="text-align:left">Meaning</th></tr></thead>
@@ -539,6 +566,8 @@
           </tbody></table></div>
         </div>
       </section>
+
+      ${sections.sources(r)}
 
       <p class="disclaimer">${esc(r.disclaimer)}</p>`;
 

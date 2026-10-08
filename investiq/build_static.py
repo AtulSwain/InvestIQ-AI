@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -71,19 +72,32 @@ def _index_row(report: dict) -> dict:
     }
 
 
-def build_site(provider: DataProvider, symbols: list[str], out: Path, pause: float = 0.0) -> dict:
+def site_config(api_base: str | None) -> str:
+    """config.js for the Pages build. ``api_base`` (the hosted FastAPI URL) enables live data."""
+    cfg = {"static": True}
+    if api_base:
+        api_base = api_base.strip().rstrip("/")
+        if not re.match(r"^https://[A-Za-z0-9.-]+(:\d+)?(/[\w./-]*)?$", api_base):
+            raise ValueError(f"--api-base must be an https:// URL, got {api_base!r}")
+        cfg["apiBase"] = api_base
+    return f"window.INVESTIQ_CONFIG = {json.dumps(cfg)};\n"
+
+
+def build_site(provider: DataProvider, symbols: list[str], out: Path, pause: float = 0.0,
+               api_base: str | None = None) -> dict:
     if out.exists():
         shutil.rmtree(out)
     (out / "data" / "reports").mkdir(parents=True)
     shutil.copytree(WEB_DIR, out / "static", ignore=shutil.ignore_patterns("index.html"))
     shutil.copy(WEB_DIR / "index.html", out / "index.html")
-    (out / "static" / "config.js").write_text("window.INVESTIQ_CONFIG = { static: true };\n")
+    (out / "static" / "config.js").write_text(site_config(api_base))
     (out / ".nojekyll").write_text("")
 
     rows, failures = [], []
     for i, symbol in enumerate(symbols, 1):
         try:
-            report = build_report(provider, symbol)
+            # Snapshots are read hours later, so never bake in a "real-time" quote.
+            report = build_report(provider, symbol, live_quotes=False)
         except Exception as exc:  # one bad ticker must not stop the build
             failures.append({"symbol": symbol, "error": str(exc)[:200]})
             print(f"[{i}/{len(symbols)}] {symbol}: FAILED {exc}", file=sys.stderr)
@@ -112,11 +126,14 @@ def main():
     parser.add_argument("--symbols", help="comma-separated tickers (default: built-in list)")
     parser.add_argument("--demo", action="store_true", help="synthetic data, no network")
     parser.add_argument("--pause", type=float, default=0.5, help="seconds between stocks (be kind to Yahoo)")
+    parser.add_argument("--api-base", default=os.environ.get("INVESTIQ_API_URL"),
+                        help="https URL of the hosted InvestIQ API (enables live data on the site)")
     args = parser.parse_args()
 
     symbols = [s.strip().upper() for s in args.symbols.split(",")] if args.symbols else default_universe()
     provider = DemoProvider() if args.demo else YahooProvider()
-    index = build_site(provider, symbols, Path(args.out), pause=0 if args.demo else args.pause)
+    index = build_site(provider, symbols, Path(args.out), pause=0 if args.demo else args.pause,
+                       api_base=args.api_base)
     print(f"Built {len(index['stocks'])} reports, {len(index['failed'])} failed -> {args.out}/")
     # Fail the workflow (and keep the previous deployment) if most downloads broke.
     if len(index["stocks"]) < max(1, len(symbols) // 2):

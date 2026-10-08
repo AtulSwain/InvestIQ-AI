@@ -9,7 +9,7 @@ def test_build_site(tmp_path):
     index = build_site(DemoProvider(end="2026-09-24"), ["RELIANCE.NS", "M&M.NS", "AAPL"], out)
     assert [s["symbol"] for s in index["stocks"]] == ["M&M.NS", "RELIANCE.NS", "AAPL"]
     assert (out / "index.html").exists()
-    assert "static: true" in (out / "static" / "config.js").read_text()
+    assert '"static": true' in (out / "static" / "config.js").read_text()
     assert not (out / "static" / "index.html").exists()
     report = json.loads((out / "data" / "reports" / f"{report_filename('M&M.NS')}.json").read_text())
     assert report["symbol"] == "M&M.NS"
